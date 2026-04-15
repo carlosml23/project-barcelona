@@ -115,7 +115,7 @@ export function findToolByName(name: string): OsintTool | undefined {
 export interface AnthropicToolDef {
   name: string;
   description: string;
-  input_schema: Record<string, unknown>;
+  input_schema: { type: "object"; properties?: unknown; required?: string[]; [k: string]: unknown };
 }
 
 /**
@@ -144,8 +144,8 @@ function safeHost(url: string): string {
  * Minimal Zod-to-JSON-Schema converter for our simple tool schemas.
  * Handles: z.object, z.string, z.number, z.enum, z.array, .optional()
  */
-function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
-  return zodTypeToJson(schema);
+function zodToJsonSchema(schema: z.ZodType): AnthropicToolDef["input_schema"] {
+  return zodTypeToJson(schema) as AnthropicToolDef["input_schema"];
 }
 
 function zodTypeToJson(zType: z.ZodType): Record<string, unknown> {

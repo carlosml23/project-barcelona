@@ -388,41 +388,122 @@ interface OsintTool<Input = unknown> {
 
 ### Registered Tools
 
+The refiner has access to **5 tools** — 3 client-side and 2 server-side:
+
+**Client-side (dispatched by our code):**
+
 | Name | Wraps | Input | Description (what Claude sees) |
 |------|-------|-------|-------------------------------|
 | `search_web` | Tavily | `{ query, includeDomains?, maxResults?, searchDepth? }` | "Web search via Tavily. Best for government registries (BOE, BORME), news, official Spanish sources." |
 | `search_neural` | Exa | `{ query, includeDomains?, numResults?, category? }` | "Neural search via Exa. Best for LinkedIn profiles, company websites, people search." |
 | `scrape_page` | Firecrawl | `{ url }` | "Extract full content from a specific URL via Firecrawl." |
 
-### How the Refiner Uses It
+**Server-side (executed by Anthropic):**
 
-1. `registryToAnthropicTools()` converts the registry to Anthropic SDK tool format (JSON Schema)
-2. Tools are passed to Claude in the `tools` parameter of `messages.create()`
-3. When Claude returns `tool_use` blocks, `findToolByName()` looks up the handler
-4. The handler calls the underlying tool (which goes through `withResilience()`)
-5. Results are scored and returned to Claude as `tool_result`
+| Name | Type | Cost | Description |
+|------|------|------|-------------|
+| `web_search` | `web_search_20250305` | $0.01/search | Broad web search, location-aware |
+| `web_fetch` | `web_fetch_20250910` | FREE | Fetch full page content from URLs in context |
+
+### How the Refiner Uses Mixed Tools
+
+The refiner loop handles both tool types in a single `messages.create()` call:
+
+1. Client tools (`registryToAnthropicTools()`) + server tools (`buildServerToolDefs()`) are passed together in the `tools` parameter
+2. **Server-side results** appear as content blocks in the response — already executed, evidence extracted in-place
+3. **Client tool_use blocks** are dispatched via `findToolByName()` as before
+4. Both count against the tool call budget
 
 ```
-Claude (Haiku 4.5)
+Claude (Haiku 4.5) — mixed tool response
     │
-    │ tool_use: { name: "search_neural", input: { query: "...", category: "linkedin profile" } }
+    ├── server_tool_use: web_search("carlos morales madrid")
+    │   └── web_search_tool_result: [{ url, title, encrypted_content }]  ← already executed
+    │       └── extractSearchHitsFromResponse() → scored → Evidence[]
     │
-    ▼
-findToolByName("search_neural")
+    ├── tool_use: search_neural({ query: "...", category: "linkedin profile" })
+    │   └── findToolByName("search_neural") → exaSearch() → SearchHit[] → scored → Evidence[]
     │
-    ▼
-searchNeuralTool.call(args)
-    │
-    ▼
-exaSearch(args.query, opts)     ← goes through withResilience("exa", ...)
-    │
-    ▼
-SearchHit[] → scored → Evidence[] → returned to Claude as tool_result
+    └── text: "I found a LinkedIn profile and a BOE record..."
 ```
 
 ### Zod-to-JSON-Schema Converter
 
 The registry includes a minimal `zodToJsonSchema()` converter that transforms Zod schemas into the JSON Schema format that Claude's API expects. It handles: `z.object`, `z.string`, `z.number`, `z.enum`, `z.array`, and `.optional()`.
+
+---
+
+## Tool 4: Claude web_search (Server-Side)
+
+**Best for:** Broad discovery, location-aware search, countries without specialised playbooks.
+
+**File:** `src/tools/serverTools.ts`
+
+### How It Works
+
+Claude's built-in web_search runs **server-side** — Anthropic executes the search during the `messages.create()` call. No external API key needed (uses `ANTHROPIC_API_KEY`). Results include built-in citations.
+
+### Key Feature: Location-Aware
+
+The tool is configured with `user_location` derived from the debtor's CaseRow:
+
+```typescript
+{
+  type: "web_search_20250305",
+  name: "web_search",
+  max_uses: 5,
+  user_location: {
+    type: "approximate",
+    city: "Madrid",           // from row.city
+    region: "Comunidad de Madrid",  // from row.provincia
+    country: "ES",            // from row.country
+    timezone: "Europe/Madrid" // from COUNTRY_TZ_MAP
+  }
+}
+```
+
+This localises search results to the debtor's geography — a Spanish debtor gets Spanish-language results and local sources.
+
+### Cost
+
+- **$10 per 1,000 searches** ($0.01/search) plus standard token costs
+- Controlled via `DISCOVERY_MAX_SEARCHES` (default: 5) and refiner budget
+
+### When It's Used
+
+| Stage | Purpose |
+|-------|---------|
+| Discovery (Phase 0) | Broad agentic search — Claude decides what to search |
+| Refiner (Phase 2) | Gap-filling when Tavily/Exa don't cover the source |
+
+---
+
+## Tool 5: Claude web_fetch (Server-Side)
+
+**Best for:** Retrieving full page content from URLs found in search results — **FREE**.
+
+**File:** `src/tools/serverTools.ts`
+
+### How It Works
+
+Like web_search, web_fetch runs server-side inside a `messages.create()` call. Claude can fetch any URL that appeared in search results or user messages.
+
+### Cost
+
+- **FREE** — no additional charges beyond standard token costs for the fetched content
+- Average web page (~10 kB) ≈ 2,500 tokens
+
+### Limitations
+
+- **No JavaScript rendering** — static HTML only. Use Firecrawl for JS-heavy pages.
+- **URL must exist in context** — Claude cannot construct arbitrary URLs
+
+### When It's Used
+
+| Stage | Purpose |
+|-------|---------|
+| Discovery (Phase 0) | Fetch promising pages from web_search results (free deep-dive) |
+| Refiner (Phase 2) | Preferred over scrape_page for static HTML (free vs paid) |
 
 ---
 
@@ -433,31 +514,23 @@ The registry includes a minimal `zodToJsonSchema()` converter that transforms Zo
                         │           SEARCH TASK                   │
                         └───────────┬─────────────────────────────┘
                                     │
-                    ┌───────────────┼───────────────┐
-                    │               │               │
-            ┌───────▼──────┐ ┌─────▼──────┐ ┌──────▼──────┐
-            │  Need exact  │ │ Need to    │ │ Need full   │
-            │  keyword     │ │ find a     │ │ content of  │
-            │  match?      │ │ person or  │ │ a known     │
-            │              │ │ company?   │ │ URL?        │
-            └───────┬──────┘ └─────┬──────┘ └──────┬──────┘
-                    │              │               │
-            ┌───────▼──────┐ ┌─────▼──────┐ ┌──────▼──────┐
-            │   TAVILY     │ │    EXA     │ │  FIRECRAWL  │
-            │  (web search)│ │  (neural)  │ │  (scraper)  │
-            │              │ │            │ │             │
-            │ BOE, BORME,  │ │ LinkedIn,  │ │ Registry    │
-            │ registries,  │ │ company    │ │ pages, JS   │
-            │ news, phone  │ │ sites,     │ │ apps, full  │
-            │ lookups      │ │ people     │ │ content     │
-            │              │ │ search     │ │ extraction  │
-            │ 15s timeout  │ │ 15s timeout│ │ 30s timeout │
-            └──────────────┘ └────────────┘ └─────────────┘
-                    │              │               │
-                    └──────────────┼───────────────┘
-                                   │
-                            ┌──────▼──────┐
-                            │  SearchHit  │
-                            │  (uniform)  │
-                            └─────────────┘
+            ┌───────────┬───────────┼───────────┬───────────┐
+            │           │           │           │           │
+    ┌───────▼──────┐ ┌──▼────────┐ ┌▼─────────┐ ┌▼────────┐ ┌▼────────────┐
+    │  Exact       │ │ Find a    │ │Full page │ │ Broad   │ │ Fetch page  │
+    │  keyword     │ │ person /  │ │ of a URL │ │ web     │ │ from search │
+    │  on registry │ │ company   │ │ (JS)     │ │ search  │ │ results     │
+    └───────┬──────┘ └──┬────────┘ └┬─────────┘ └┬────────┘ └┬────────────┘
+            │           │           │            │           │
+    ┌───────▼──────┐ ┌──▼────────┐ ┌▼─────────┐ ┌▼────────┐ ┌▼────────────┐
+    │   TAVILY     │ │   EXA     │ │FIRECRAWL │ │WEB_SEARCH│ │ WEB_FETCH  │
+    │  $$/search   │ │ $$/search │ │$$/scrape │ │$0.01/srch│ │   FREE     │
+    └──────────────┘ └───────────┘ └──────────┘ └──────────┘ └────────────┘
+            │           │           │            │           │
+            └───────────┴───────────┼────────────┴───────────┘
+                                    │
+                             ┌──────▼──────┐
+                             │  SearchHit  │
+                             │  (uniform)  │
+                             └─────────────┘
 ```

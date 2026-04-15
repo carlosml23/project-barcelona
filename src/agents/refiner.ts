@@ -17,6 +17,12 @@ import { env } from "../config/env.js";
 import { extractDataPoints, generateNameVariants } from "./identity.js";
 import { scoreEvidence } from "../identity/scorer.js";
 import { findToolByName, registryToAnthropicTools } from "../tools/registry.js";
+import {
+  buildServerToolDefs,
+  isServerToolResultBlock,
+  extractSearchHitsFromResponse,
+  countServerToolUses,
+} from "../tools/serverTools.js";
 import { newId } from "../util/id.js";
 import type { CaseRow, Evidence, Gap, TraceEvent } from "../state/types.js";
 
@@ -66,7 +72,9 @@ export async function refineEvidence(
   }
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-  const tools = registryToAnthropicTools();
+  const clientTools = registryToAnthropicTools();
+  const serverTools = buildServerToolDefs(row, { maxSearches: 3, maxFetches: 2 });
+  const tools = [...clientTools, ...serverTools];
   const systemPrompt = buildSystemPrompt(row, currentEvidence, gaps);
 
   // Initial user message with evidence summary
@@ -94,11 +102,47 @@ export async function refineEvidence(
       model: REFINER_MODEL,
       max_tokens: 1500,
       system: systemPrompt,
-      tools: tools as Anthropic.Tool[],
+      tools,
       messages,
     });
 
-    // ── 2. Check stop condition ──────────────────────────────────────────
+    // ── 2. Extract server-side tool results (already executed) ───────────
+    const serverToolCount = countServerToolUses(response);
+    if (serverToolCount > 0) {
+      totalToolCalls += serverToolCount;
+      const serverHits = extractSearchHitsFromResponse(response);
+
+      const serverEvidence = serverHits.map((h) => {
+        const text = `${h.title ?? ""} ${h.snippet}`;
+        const scoring = scoreEvidence(dataPoints, text, [], h.source);
+        const isFromFetch = (h.raw as Record<string, unknown>)?.fetched === true;
+        return {
+          id: newId("ev_"),
+          case_id: row.case_id,
+          agent: isFromFetch ? "refiner:web_fetch" : "refiner:web_search",
+          source: h.source,
+          url: h.url,
+          title: h.title,
+          snippet: h.snippet,
+          retrieved_at: h.retrieved_at,
+          identity_match_score: scoring.total,
+          signal_type: "other" as const,
+          matched_data_points: scoring.matchedFields,
+          pairing_confidence: scoring.pairingConfidence,
+          raw: h.raw,
+        };
+      });
+
+      additionalEvidence.push(...serverEvidence);
+      trace.push({
+        ts: ts(), case_id: row.case_id, agent: "refiner",
+        kind: "tool_result",
+        message: `server tools (web_search/web_fetch) → ${serverEvidence.length} hits from ${serverToolCount} calls`,
+        data: { urls: serverEvidence.map((e) => e.url) },
+      });
+    }
+
+    // ── 3. Check stop condition ──────────────────────────────────────────
     if (response.stop_reason === "end_turn") {
       const textContent = response.content.find((b) => b.type === "text");
       trace.push({
@@ -110,7 +154,7 @@ export async function refineEvidence(
       break;
     }
 
-    // ── 3. Detect tool_use blocks ────────────────────────────────────────
+    // ── 4. Detect client tool_use blocks ─────────────────────────────────
     const toolUseBlocks = response.content.filter(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
     );
@@ -118,12 +162,12 @@ export async function refineEvidence(
     if (toolUseBlocks.length === 0) {
       trace.push({
         ts: ts(), case_id: row.case_id, agent: "refiner",
-        kind: "decision", message: "stopped — no tool_use blocks in response",
+        kind: "decision", message: "stopped — no client tool_use blocks in response",
       });
       break;
     }
 
-    // ── 4. Dispatch tools concurrently (all are isConcurrencySafe) ───────
+    // ── 5. Dispatch client tools concurrently ────────────────────────────
     messages.push({ role: "assistant", content: response.content });
 
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
@@ -229,10 +273,10 @@ export async function refineEvidence(
     const results = await Promise.all(toolPromises);
     toolResults.push(...results);
 
-    // ── 5. Append tool results to messages ───────────────────────────────
+    // ── 6. Append tool results to messages ───────────────────────────────
     messages.push({ role: "user", content: toolResults });
 
-    // ── 6. Budget check ──────────────────────────────────────────────────
+    // ── 7. Budget check ──────────────────────────────────────────────────
     if (totalToolCalls >= maxToolCalls) {
       trace.push({
         ts: ts(), case_id: row.case_id, agent: "refiner",
@@ -296,6 +340,13 @@ STRATEGIES (in priority order):
 5. If call_outcome is "invalid_number"/"wrong_number", phone data is unreliable — skip phone searches
 6. Try DNI in registries not yet searched (BOE, BDNS, provincial bulletins)
 7. Scrape specific URLs referenced in evidence snippets
+8. web_search — broad web discovery for sources not covered by the targeted tools above
+9. web_fetch — retrieve full page content from URLs found in search results (FREE, no cost)
+
+COST GUIDANCE:
+- web_fetch is FREE → always prefer over scrape_page for static HTML pages
+- web_search costs $0.01/search → use when search_web/search_neural don't cover the source
+- scrape_page (Firecrawl) → reserve for JavaScript-heavy pages (LinkedIn SPAs, dynamic registries)
 
 RULES:
 - DO NOT repeat searches that already returned results

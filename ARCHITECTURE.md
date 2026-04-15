@@ -232,50 +232,69 @@ The refiner's targeted searches produced **10 high-confidence matches** — a ma
  name, country,                                                     briefing with
  debt context        ┌─────────────────────────────────────────┐    findings, angles,
 ───────────────────► │                                         │ ──► gaps, confidence
-                     │  ┌───────┐   PHASE 1: DETERMINISTIC     │
+                     │  ┌───────┐   PHASE 0+1 (PARALLEL)      │
                      │  │IDENTITY│  ──────────────────────────  │
                      │  │ agent │  Name variants, data points  │
                      │  └───┬───┘                              │
                      │      │                                  │
-                     │  ┌───▼───────────────────────────────┐  │
-                     │  │         SEARCH FAN-OUT            │  │
-                     │  │  Playbook → 20+ queries parallel  │  │
-                     │  │  ┌─────┐  ┌──────┐  ┌─────────┐  │  │
-                     │  │  │ Exa │  │Tavily│  │Firecrawl│  │  │
-                     │  │  └──┬──┘  └──┬───┘  └────┬────┘  │  │
-                     │  │     └────────┤───────────┘       │  │
-                     │  │          Score each hit           │  │
-                     │  └───────────────┬───────────────────┘  │
-                     │                  │                       │
-                     │  ┌───────────────▼───────────────────┐  │
-                     │  │           VERIFIER                │  │
-                     │  │  kept / dropped / gaps            │  │
-                     │  └───────────────┬───────────────────┘  │
-                     │                  │                       │
-                     │  ┌───────────────▼───────────────────┐  │
-                     │  │  PHASE 2: AGENTIC (Claude)        │  │
-                     │  │  ─────────────────────────────    │  │
-                     │  │  Refiner reviews gaps → targeted  │  │
-                     │  │  follow-up searches → re-verify   │  │
-                     │  └───────────────┬───────────────────┘  │
-                     │                  │                       │
-                     │  ┌───────────────▼───────────────────┐  │
-                     │  │         SYNTHESISER               │  │
-                     │  │  Claude → briefing → cite-or-omit │  │
-                     │  └───────────────────────────────────┘  │
-                     │                                         │
-                     └─────────────────────────────────────────┘
+                     │      ├──────────────────┐               │
+                     │      │                  │               │
+                     │  ┌───▼────────────┐ ┌───▼────────────┐  │
+                     │  │  DISCOVERY      │ │ SEARCH FAN-OUT │  │
+                     │  │  Claude Haiku + │ │ Playbook →     │  │
+                     │  │  web_search +   │ │ 20+ queries    │  │
+                     │  │  web_fetch      │ │ parallel       │  │
+                     │  │  (location-     │ │ ┌───┐┌──────┐  │  │
+                     │  │   aware)        │ │ │Exa││Tavily│  │  │
+                     │  └───────┬─────────┘ │ └─┬─┘└──┬───┘  │  │
+                     │          │            │   └─────┘      │  │
+                     │          │            └───────┬────────┘  │
+                     │          │                    │           │
+                     │  ┌───────▼────────────────────▼───────┐  │
+                     │  │  DEDUPLICATE + MERGE (by URL)      │  │
+                     │  └───────────────┬────────────────────┘  │
+                     │                  │                        │
+                     │  ┌───────────────▼───────────────────┐   │
+                     │  │           VERIFIER                │   │
+                     │  │  kept / dropped / gaps            │   │
+                     │  └───────────────┬───────────────────┘   │
+                     │                  │                        │
+                     │  ┌───────────────▼───────────────────┐   │
+                     │  │  PHASE 2: AGENTIC (Claude)        │   │
+                     │  │  ─────────────────────────────    │   │
+                     │  │  Refiner: 5 tools (search_web,    │   │
+                     │  │  search_neural, scrape_page,      │   │
+                     │  │  web_search, web_fetch)           │   │
+                     │  └───────────────┬───────────────────┘   │
+                     │                  │                        │
+                     │  ┌───────────────▼───────────────────┐   │
+                     │  │         SYNTHESISER               │   │
+                     │  │  Claude → briefing → cite-or-omit │   │
+                     │  └───────────────────────────────────┘   │
+                     │                                          │
+                     └──────────────────────────────────────────┘
 
+  PHASE 0 is agentic discovery — Claude + web_search/web_fetch, location-aware.
   PHASE 1 is fully deterministic — no LLM calls, same input = same searches.
-  PHASE 2 is agentic — Claude decides what follow-ups to run.
-  System works without Phase 2 (heuristic fallback if no Anthropic key).
+  Phase 0+1 run in PARALLEL — no added latency.
+  PHASE 2 is agentic — Claude decides what follow-ups to run (now with 5 tools).
+  System works without Phase 0+2 (heuristic fallback if no Anthropic key).
 ```
 
 ---
 
-## The Two-Phase Search Architecture
+## The Three-Phase Search Architecture
 
-This is the core design decision. Instead of giving Claude full control over what to search (slow, expensive, unpredictable), the system splits the work:
+This is the core design decision. Instead of giving Claude full control over what to search (slow, expensive, unpredictable), the system splits the work into three phases:
+
+### Phase 0: Agentic Discovery (NEW)
+
+- Claude (Haiku 4.5) with built-in **web_search** + **web_fetch** server-side tools
+- Broad discovery: multiple search strategies (name variants, employer, DNI, location)
+- **Location-aware**: web_search is configured with the debtor's country/city/provincia for localised results
+- **web_fetch is FREE** — Claude fetches promising pages at zero cost
+- Runs **in parallel** with Phase 1 — no added latency
+- Results are deduplicated and merged with Phase 1 before verification
 
 ### Phase 1: Deterministic Fan-Out
 
@@ -286,12 +305,14 @@ This is the core design decision. Instead of giving Claude full control over wha
 
 ### Phase 2: Agentic Refinement
 
-- Claude (Haiku 4.5) inspects the **gaps** from Phase 1
-- Makes **targeted follow-up searches** to fill them (max 3 iterations, max 6 tool calls)
+- Claude (Haiku 4.5) inspects the **gaps** from Phase 0+1
+- Now has **5 tools**: search_web (Tavily), search_neural (Exa), scrape_page (Firecrawl), web_search (Claude built-in), web_fetch (FREE)
+- Cost-aware: prompt guides Claude to prefer web_fetch (free) over scrape_page for static HTML
+- Makes **targeted follow-up searches** to fill gaps (max 3 iterations, max 6 tool calls)
 - New evidence is re-scored and re-verified through the same pipeline
-- If no Anthropic key is available, this phase is skipped entirely
+- If no Anthropic key is available, Phases 0 and 2 are skipped entirely
 
-**Why two phases?** Phase 1 covers the 80% case — known sources, structured queries, fast results. Phase 2 handles the long tail — creative searches, name variations Claude notices, URLs referenced in snippets. Separating them means the system is fast by default and smart when it needs to be.
+**Why three phases?** Phase 0 provides broad agentic discovery that catches unexpected leads the deterministic playbooks wouldn't find. Phase 1 covers the 80% case — known sources, structured queries, fast results. Phase 2 handles the long tail — creative searches, name variations Claude notices, URLs referenced in snippets. Phases 0+1 run in parallel so the system is fast by default and smart when it needs to be.
 
 See [docs/parallel-search.md](docs/parallel-search.md) for the full concurrency model.
 
@@ -359,41 +380,36 @@ If Claude invents a claim and attaches a fake evidence ID, it gets removed. If C
 
 ## Search Tools
 
-Three external APIs, each with a specific strength:
+Five search tools — three external APIs plus two Claude built-in server-side tools:
 
 ```
-                ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-                │       EXA       │     │     TAVILY      │     │   FIRECRAWL     │
-                │  Neural Search  │     │   Web Search    │     │  Page Scraper   │
-                ├─────────────────┤     ├─────────────────┤     ├─────────────────┤
-                │ Understands     │     │ Exact keyword   │     │ Renders JS,     │
-                │ meaning, finds  │     │ matching on     │     │ extracts full   │
-                │ profiles even   │     │ specific sites  │     │ markdown from   │
-                │ with name       │     │ (BOE, BORME,    │     │ a known URL     │
-                │ variations      │     │ registries)     │     │                 │
-                ├─────────────────┤     ├─────────────────┤     ├─────────────────┤
-                │ LinkedIn, co.   │     │ 18 of 23 Spain  │     │ Used by refiner │
-                │ pages, people   │     │ recipes (the    │     │ for deep page   │
-                │                 │     │ workhorse)      │     │ extraction      │
-                ├─────────────────┤     ├─────────────────┤     ├─────────────────┤
-                │ 15s timeout     │     │ 15s timeout     │     │ 30s timeout     │
-                │ 3 retries       │     │ 3 retries       │     │ 3 retries       │
-                └─────────────────┘     └─────────────────┘     └─────────────────┘
-                        │                       │                       │
-                        └───────────────────────┤───────────────────────┘
-                                                │
-                                     ┌──────────▼──────────┐
-                                     │    SearchHit        │
-                                     │ (uniform interface) │
-                                     └─────────────────────┘
+  EXTERNAL (client-side dispatch)                        BUILT-IN (server-side, Anthropic executes)
+  ┌─────────────────┐  ┌─────────────────┐  ┌──────────┐  ┌─────────────────┐  ┌─────────────────┐
+  │       EXA       │  │     TAVILY      │  │FIRECRAWL │  │   WEB_SEARCH    │  │   WEB_FETCH     │
+  │  Neural Search  │  │   Web Search    │  │ Scraper  │  │  Claude built-in│  │  Claude built-in│
+  ├─────────────────┤  ├─────────────────┤  ├──────────┤  ├─────────────────┤  ├─────────────────┤
+  │ Semantic match, │  │ Exact keyword   │  │ JS heavy │  │ Broad web search│  │ Fetch full page │
+  │ LinkedIn, co.   │  │ BOE, BORME,     │  │ pages,   │  │ location-aware  │  │ content from    │
+  │ pages, people   │  │ registries      │  │ SPAs     │  │ built-in cites  │  │ any URL — FREE  │
+  ├─────────────────┤  ├─────────────────┤  ├──────────┤  ├─────────────────┤  ├─────────────────┤
+  │ 15s timeout     │  │ 15s timeout     │  │ 30s      │  │ $0.01/search    │  │ $0 (tokens only)│
+  │ 3 retries       │  │ 3 retries       │  │ 3 retries│  │ No JS rendering │  │ No JS rendering │
+  └────────┬────────┘  └────────┬────────┘  └────┬─────┘  └────────┬────────┘  └────────┬────────┘
+           └─────────────────────┼────────────────┼─────────────────┼─────────────────────┘
+                                 │                │                 │
+                      ┌──────────▼─────────────────────────────────┐
+                      │              SearchHit (uniform interface)  │
+                      └────────────────────────────────────────────┘
 ```
 
-All three return the same `SearchHit` shape — the rest of the pipeline doesn't care which API produced a result.
+All five produce the same `SearchHit` shape — the rest of the pipeline doesn't care which tool produced a result.
 
-Every tool call is wrapped in `withResilience()`:
+**External tools** (Exa, Tavily, Firecrawl) are dispatched by our code. Every call is wrapped in `withResilience()`:
 - **Exponential backoff** on transient errors (429, 500-504, network resets)
 - **Circuit breaker** per tool — 5 consecutive failures opens the circuit for 60s
 - **Timeout per attempt** with `AbortController` — truly cancels the HTTP connection
+
+**Server-side tools** (web_search, web_fetch) run inside Claude API calls — Anthropic executes them. No extra API keys needed. web_search is configured with `user_location` derived from the debtor's country/city/provincia for localised results.
 
 See [docs/tools.md](docs/tools.md) for API details, response mapping, and the full resilience architecture.
 
@@ -440,9 +456,14 @@ No stage mutates data from a previous stage. Each function returns new objects:
 ```
 CaseRow (input)
     │
-    ├── runSearchFanOut(row)  →  { evidence: Evidence[], trace: TraceEvent[] }
+    ├── Promise.all([                                          ← PARALLEL
+    │     discoverEvidence(row)  →  { evidence, trace }        ← Stage 0
+    │     runSearchFanOut(row)   →  { evidence, trace }        ← Stage 1
+    │   ])
     │
-    ├── verifyEvidence(id, evidence)  →  { kept, dropped, gaps, trace }
+    ├── deduplicateEvidence(discovery + fanout)  →  Evidence[]  ← merge by URL
+    │
+    ├── verifyEvidence(id, merged)  →  { kept, dropped, gaps, trace }
     │
     ├── refineEvidence(row, kept, gaps)  →  { additionalEvidence, trace }
     │   └── verifyEvidence(id, additionalEvidence)  →  { kept, dropped, gaps }
@@ -502,11 +523,12 @@ The system keeps working as components fail or are unavailable:
 
 | Situation | What happens |
 |-----------|-------------|
-| No Anthropic API key | Phase 2 skipped. Heuristic synthesiser builds briefing from Phase 1 evidence. |
-| Exa API is down | Circuit breaker trips after 5 failures. LinkedIn recipes emit gaps. Tavily recipes continue. |
+| No Anthropic API key | Phases 0 and 2 skipped. Heuristic synthesiser builds briefing from Phase 1 evidence. |
+| Exa API is down | Circuit breaker trips after 5 failures. LinkedIn recipes emit gaps. Tavily + web_search continue. |
 | No DNI provided | DNI-based recipes skipped (~10 fewer queries). Name/phone/employer queries still run. |
 | Phone is invalid | `call_outcome` = `invalid_number` → phone field suppressed → phone recipes skipped. |
-| Firecrawl times out | Refiner's scrape attempts fail gracefully. Other tools unaffected. |
+| Firecrawl times out | Refiner uses web_fetch (free) as fallback for static pages. JS-heavy pages emit gaps. |
+| Discovery disabled | `DISCOVERY_ENABLED=false` → Phase 0 skipped. Phase 1 runs alone as before. |
 
 ---
 
@@ -516,9 +538,10 @@ The system keeps working as components fail or are unavailable:
 |-------|-----------|
 | Language | TypeScript (ESM, Node 20+) |
 | LLM (synthesis) | Claude Sonnet 4.5 via Anthropic SDK |
-| LLM (refinement) | Claude Haiku 4.5 (faster, cheaper for tool-use loop) |
+| LLM (refinement + discovery) | Claude Haiku 4.5 (faster, cheaper for tool-use loops) |
 | Neural search | Exa (semantic/people/LinkedIn) |
 | Web search | Tavily (registries/news/exact match) |
+| Agentic search | Claude web_search (location-aware, $0.01/search) + web_fetch (FREE) |
 | Scraping | Firecrawl (JS rendering, full page markdown) |
 | Database | SQLite via better-sqlite3 (WAL mode) |
 | Validation | Zod at every boundary |

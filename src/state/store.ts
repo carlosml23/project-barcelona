@@ -16,6 +16,15 @@ CREATE TABLE IF NOT EXISTS cases (
   country TEXT NOT NULL,
   full_name TEXT NOT NULL,
   phone TEXT,
+  email TEXT,
+  dni_nie TEXT,
+  provincia TEXT,
+  employer TEXT,
+  autonomo INTEGER,
+  bank_account TEXT,
+  vida_laboral INTEGER,
+  city TEXT,
+  postal_code TEXT,
   debt_eur REAL NOT NULL,
   debt_origin TEXT NOT NULL,
   debt_age_months INTEGER NOT NULL,
@@ -36,6 +45,8 @@ CREATE TABLE IF NOT EXISTS evidence (
   retrieved_at TEXT NOT NULL,
   identity_match_score REAL NOT NULL,
   signal_type TEXT NOT NULL,
+  matched_data_points TEXT,
+  pairing_confidence TEXT,
   raw_json TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_evidence_case ON evidence(case_id);
@@ -59,17 +70,19 @@ CREATE TABLE IF NOT EXISTS briefings (
 `);
 
 const insertCase = db.prepare(`
-INSERT OR REPLACE INTO cases (case_id, country, full_name, phone, debt_eur, debt_origin,
-  debt_age_months, call_attempts, call_outcome, legal_asset_finding)
-VALUES (@case_id, @country, @full_name, @phone, @debt_eur, @debt_origin,
-  @debt_age_months, @call_attempts, @call_outcome, @legal_asset_finding)
+INSERT OR REPLACE INTO cases (case_id, country, full_name, phone, email, dni_nie,
+  provincia, employer, autonomo, bank_account, vida_laboral, city, postal_code,
+  debt_eur, debt_origin, debt_age_months, call_attempts, call_outcome, legal_asset_finding)
+VALUES (@case_id, @country, @full_name, @phone, @email, @dni_nie,
+  @provincia, @employer, @autonomo, @bank_account, @vida_laboral, @city, @postal_code,
+  @debt_eur, @debt_origin, @debt_age_months, @call_attempts, @call_outcome, @legal_asset_finding)
 `);
 
 const insertEvidence = db.prepare(`
 INSERT OR REPLACE INTO evidence (id, case_id, agent, source, url, title, snippet,
-  retrieved_at, identity_match_score, signal_type, raw_json)
+  retrieved_at, identity_match_score, signal_type, matched_data_points, pairing_confidence, raw_json)
 VALUES (@id, @case_id, @agent, @source, @url, @title, @snippet,
-  @retrieved_at, @identity_match_score, @signal_type, @raw_json)
+  @retrieved_at, @identity_match_score, @signal_type, @matched_data_points, @pairing_confidence, @raw_json)
 `);
 
 const insertTrace = db.prepare(`
@@ -84,12 +97,26 @@ VALUES (?, ?, ?)
 
 export const store = {
   saveCase(row: CaseRow): void {
-    insertCase.run({ ...row, phone: row.phone ?? null });
+    insertCase.run({
+      ...row,
+      phone: row.phone ?? null,
+      email: row.email ?? null,
+      dni_nie: row.dni_nie ?? null,
+      provincia: row.provincia ?? null,
+      employer: row.employer ?? null,
+      autonomo: row.autonomo != null ? (row.autonomo ? 1 : 0) : null,
+      bank_account: row.bank_account ?? null,
+      vida_laboral: row.vida_laboral != null ? (row.vida_laboral ? 1 : 0) : null,
+      city: row.city ?? null,
+      postal_code: row.postal_code ?? null,
+    });
   },
   saveEvidence(e: Evidence): void {
     insertEvidence.run({
       ...e,
       title: e.title ?? null,
+      matched_data_points: JSON.stringify(e.matched_data_points),
+      pairing_confidence: e.pairing_confidence,
       raw_json: e.raw ? JSON.stringify(e.raw) : null,
     });
   },
@@ -108,7 +135,12 @@ export const store = {
   getEvidence(case_id: string): Evidence[] {
     const rows = db
       .prepare(`SELECT * FROM evidence WHERE case_id = ?`)
-      .all(case_id) as Array<Evidence & { raw_json: string | null }>;
-    return rows.map((r) => ({ ...r, raw: r.raw_json ? JSON.parse(r.raw_json) : undefined }));
+      .all(case_id) as Array<Evidence & { raw_json: string | null; matched_data_points: string | null }>;
+    return rows.map((r) => ({
+      ...r,
+      matched_data_points: r.matched_data_points ? JSON.parse(r.matched_data_points) : [],
+      pairing_confidence: r.pairing_confidence ?? "low",
+      raw: r.raw_json ? JSON.parse(r.raw_json) : undefined,
+    }));
   },
 };

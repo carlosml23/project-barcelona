@@ -21,8 +21,10 @@ export interface DataPoint {
 export function buildPlaybookCtx(row: CaseRow): PlaybookCtx {
   const prefix = row.phone ? Object.keys(PHONE_COUNTRY_HINTS).find((p) => row.phone!.startsWith(p)) : undefined;
   const dniNorm = row.dni_nie ? normaliseDni(row.dni_nie) : undefined;
+  const nameVariants = generateNameVariants(row.full_name);
   return {
     full_name: normaliseName(row.full_name),
+    name_variants: nameVariants,
     country: row.country,
     phoneHint: prefix,
     phone: row.phone,
@@ -90,14 +92,15 @@ export function normaliseEmployer(employer: string): string {
 export function extractDataPoints(row: CaseRow): DataPoint[] {
   const points: DataPoint[] = [];
 
-  // full_name — always present
+  // full_name — always present, including name variants for partial matching
   const nameNorm = normaliseName(row.full_name).toLowerCase();
   const tokens = nameTokens(row.full_name);
+  const variants = generateNameVariants(row.full_name);
   points.push({
     field: "full_name",
     value: row.full_name,
     normalized: nameNorm,
-    search_variants: [nameNorm, ...tokens],
+    search_variants: [...new Set([nameNorm, ...variants, ...tokens])],
   });
 
   if (row.phone) {
@@ -176,4 +179,56 @@ export function extractDataPoints(row: CaseRow): DataPoint[] {
   }
 
   return points;
+}
+
+// ── Name Variant Generation ─────────────────────────────────────────────────
+
+/**
+ * Generate common name variants for Spanish naming conventions.
+ *
+ * Spanish legal names follow: nombre1 [nombre2] apellido1 [apellido2]
+ * People commonly shorten these on social platforms:
+ *   "Carlos Sebastian Morales Lascano" → "Carlos Morales Lascano", "Carlos Morales"
+ *   "Maria Jose Garcia Fernandez"     → "Maria Garcia Fernandez", "Maria Garcia"
+ *
+ * Returns lowercased variants (excluding individual tokens — those are added separately).
+ */
+export function generateNameVariants(fullName: string): string[] {
+  const tokens = nameTokens(fullName);
+  if (tokens.length <= 2) return [tokens.join(" ")];
+
+  const variants: string[] = [];
+  const full = tokens.join(" ");
+  variants.push(full);
+
+  if (tokens.length === 3) {
+    // Could be: nombre apellido1 apellido2 OR nombre1 nombre2 apellido
+    // Generate both interpretations
+    const [a, b, c] = tokens;
+    variants.push(`${a} ${c}`);  // nombre + apellido2 (if b is middle name)
+    variants.push(`${a} ${b}`);  // nombre + apellido1 (if c is apellido2)
+  }
+
+  if (tokens.length === 4) {
+    // Most likely: nombre1 nombre2 apellido1 apellido2
+    const [n1, n2, s1, s2] = tokens;
+    variants.push(`${n1} ${s1} ${s2}`);  // drop middle name (most common social usage)
+    variants.push(`${n1} ${s1}`);         // first name + first surname
+    variants.push(`${n1} ${n2} ${s1}`);   // both first names + first surname
+    variants.push(`${n2} ${s1} ${s2}`);   // middle name as first (some people prefer it)
+  }
+
+  if (tokens.length >= 5) {
+    // Rare but possible: multiple first names or compound surnames
+    // Try: first token + last two tokens (likely apellido1 apellido2)
+    const first = tokens[0];
+    const lastTwo = tokens.slice(-2);
+    variants.push(`${first} ${lastTwo.join(" ")}`);
+    variants.push(`${first} ${lastTwo[0]}`);
+    // Try: first two tokens + last two tokens
+    variants.push(`${tokens[0]} ${tokens[1]} ${lastTwo.join(" ")}`);
+  }
+
+  // Deduplicate and exclude the full name (already included)
+  return [...new Set(variants)];
 }

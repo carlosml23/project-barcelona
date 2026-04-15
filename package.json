@@ -1,23 +1,36 @@
 {
   "name": "project-barcelona",
   "version": "0.1.0",
-  "description": "Hackathon project",
-  "private": false,
+  "description": "Debtor Intelligence Agent — OSINT multi-agent system for debt collection briefings",
+  "private": true,
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "run:one": "tsx src/cli/runOne.ts",
+    "run:case": "tsx src/cli/runCase.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "engines": {
     "node": ">=20"
   },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "better-sqlite3": "^11.3.0",
+    "csv-parse": "^5.5.6",
+    "dotenv": "^16.4.5",
+    "p-queue": "^8.0.1",
+    "zod": "^3.23.8"
+  },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^20.11.0",
     "tsx": "^4.7.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^2.1.0"
   }
 }

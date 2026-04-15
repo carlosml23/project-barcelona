@@ -1,0 +1,5 @@
+case_id,country,debt_eur,debt_origin,debt_age_months,call_attempts,call_outcome,legal_asset_finding,full_name,phone
+C001,ES,21077,personal_loan,31,1,not_debtor,assets_not_seizable,Juan García López,+34600111222
+C002,PL,6665,personal_loan,8,2,not_debtor,no_assets_found,Anna Kowalska,+48500111222
+C003,ES,2384,telecom,6,3,busy,no_assets_found,María Fernández Ruiz,+34611222333
+C004,PT,11543,consumer_loan,13,6,rings_out,no_assets_found,João Pereira Santos,+351912345678

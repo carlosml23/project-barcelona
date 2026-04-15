@@ -1,0 +1,10 @@
+{
+  "enabledPlugins": {
+    "ecc@ecc": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": false,
+    "hookify@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": false,
+    "mgrep@Mixedbread-Grep": true
+  }
+}

@@ -1,5 +1,6 @@
 import { env } from "../config/env.js";
 import type { SearchHit } from "./exa.js";
+import { withResilience } from "./resilience.js";
 
 interface TavilyResult {
   url: string;
@@ -22,12 +23,14 @@ export interface TavilySearchOptions {
   topic?: "general" | "news";
 }
 
-export async function tavilySearch(
+async function tavilySearchInternal(
   query: string,
-  opts: TavilySearchOptions = {},
+  opts: TavilySearchOptions,
+  signal: AbortSignal,
 ): Promise<SearchHit[]> {
   const res = await fetch("https://api.tavily.com/search", {
     method: "POST",
+    signal,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       api_key: env.TAVILY_API,
@@ -50,4 +53,11 @@ export async function tavilySearch(
     retrieved_at: ts,
     raw: r,
   }));
+}
+
+export async function tavilySearch(
+  query: string,
+  opts: TavilySearchOptions = {},
+): Promise<SearchHit[]> {
+  return withResilience("tavily", (signal) => tavilySearchInternal(query, opts, signal));
 }

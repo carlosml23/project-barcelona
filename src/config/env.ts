@@ -8,6 +8,9 @@ const EnvSchema = z.object({
   FIRECRAWL: z.string().min(1),
   SQLITE_PATH: z.string().default("./data/app.db"),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  // Refiner configuration (agentic refinement loop)
+  REFINER_MAX_ITERATIONS: z.coerce.number().int().min(0).default(3),
+  REFINER_MAX_TOOL_CALLS: z.coerce.number().int().min(0).default(6),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

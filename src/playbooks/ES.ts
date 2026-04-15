@@ -327,15 +327,50 @@ const recipes: SourceRecipe[] = [
     signal_type: "employment",
     tool: "exa",
     can_verify_pairs: [["full_name", "employer"], ["full_name", "city"]],
-    buildQueries: (ctx) => [
-      {
-        query: `${ctx.full_name} ${ctx.employer ?? ""} ${ctx.city ?? "Spain"} site:linkedin.com/in`,
-        includeDomains: ["linkedin.com"],
-        priority: 2,
-        requires_fields: [],
-        target_pairs: [["full_name", "employer"], ["full_name", "city"]],
-      },
-    ],
+    buildQueries: (ctx) => {
+      // Search with each name variant — people often use shortened names on LinkedIn
+      // e.g., "Carlos Morales Lascano" instead of "Carlos Sebastian Morales Lascano"
+      const location = ctx.city ?? "Spain";
+      const employer = ctx.employer ?? "";
+      const seen = new Set<string>();
+      const queries = [];
+
+      for (const variant of ctx.name_variants) {
+        const q = `${variant} ${employer} ${location} site:linkedin.com/in`.replace(/\s+/g, " ").trim();
+        if (seen.has(q)) continue;
+        seen.add(q);
+        queries.push({
+          query: q,
+          includeDomains: ["linkedin.com"],
+          priority: variant === ctx.full_name.toLowerCase() ? 2 : 3,
+          requires_fields: [],
+          target_pairs: [["full_name", "employer"], ["full_name", "city"]],
+        });
+      }
+      return queries;
+    },
+  },
+  {
+    id: "linkedin_es_web",
+    label: "LinkedIn profile via web search (name variants)",
+    signal_type: "employment",
+    tool: "tavily",
+    can_verify_pairs: [["full_name", "employer"], ["full_name", "city"]],
+    buildQueries: (ctx) => {
+      // Tavily web search catches LinkedIn profiles that Exa's neural search misses.
+      // Use the shortened name variant (most common on social platforms).
+      const shortVariant = ctx.name_variants.find((v) => v !== ctx.full_name.toLowerCase()) ?? ctx.full_name;
+      const location = ctx.city ?? "Spain";
+      return [
+        {
+          query: `"${shortVariant}" ${location} site:linkedin.com/in`,
+          includeDomains: ["linkedin.com"],
+          priority: 3,
+          requires_fields: [],
+          target_pairs: [["full_name", "employer"], ["full_name", "city"]],
+        },
+      ];
+    },
   },
   {
     id: "dateas",

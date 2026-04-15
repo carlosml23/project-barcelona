@@ -18,6 +18,8 @@ export interface SourceRecipe {
   buildQueries: (ctx: PlaybookCtx) => QueryVariant[];
 }
 
+export type SearchGoal = "find_direct_contact" | "find_external_contact" | "balanced";
+
 export interface PlaybookCtx {
   full_name: string;
   country: string;
@@ -35,6 +37,10 @@ export interface PlaybookCtx {
   has_email: boolean;
   has_phone: boolean;
   has_employer: boolean;
+  search_goal: SearchGoal;
+  call_outcome: string;
+  debt_origin: string;
+  debt_eur: number;
 }
 
 export interface Playbook {

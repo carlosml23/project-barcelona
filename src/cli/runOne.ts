@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import { CaseRowSchema, type CaseRow } from "../state/types.js";
 import { runCase } from "../orchestrator/graph.js";
 import { newId } from "../util/id.js";
+import { deriveSearchGoal } from "../agents/identity.js";
 
 const { values } = parseArgs({
   options: {
@@ -63,9 +64,17 @@ const dataFields = [
   row.city && `city=${row.city}`,
 ].filter(Boolean);
 
+const searchGoal = deriveSearchGoal(row.call_outcome);
+const goalExplanation = searchGoal === "find_direct_contact"
+  ? "debtor unreachable, bad contact info"
+  : searchGoal === "find_external_contact"
+    ? "debtor likely avoiding"
+    : "balanced intelligence";
+
 console.log(`\n=== Running case ${row.case_id} ===`);
 console.log(`debtor: ${row.full_name} (${row.country})  debt: €${row.debt_eur} ${row.debt_origin} (${row.debt_age_months}mo)`);
 console.log(`prior: call=${row.call_outcome} legal=${row.legal_asset_finding}`);
+console.log(`search goal: ${searchGoal} (call_outcome=${row.call_outcome} → ${goalExplanation})`);
 console.log(`data points: ${dataFields.length > 0 ? dataFields.join(" | ") : "name only"}\n`);
 
 const state = await runCase(row, { onTrace: (m) => console.log(m) });

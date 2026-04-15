@@ -29,3 +29,8 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Data (PII)
+data/cases.sample.csv
+.specific
+specific.local

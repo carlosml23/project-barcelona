@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { BriefingSchema, type Briefing, type CaseRow, type Evidence, type Gap, type TraceEvent } from "../state/types.js";
 import { env } from "../config/env.js";
-import { extractDataPoints } from "./identity.js";
+import { extractDataPoints, deriveSearchGoal } from "./identity.js";
+import type { SearchGoal } from "../playbooks/types.js";
 
 const MODEL = "claude-sonnet-4-5-20250929";
 
@@ -30,6 +31,29 @@ YOUR RULES — violating any is a disqualifying hallucination:
     - Low confidence → softer angles, focus on debt resolution rather than specific claims
   • signal_type can be: "employment", "business", "asset", "social", "news", "legal", "registry", "subsidy", "other"
   • Output MUST be valid JSON matching the provided schema — no prose outside JSON.
+
+SEARCH STRATEGY CONTEXT (driven by call_outcome):
+  The system adapts its search based on prior call outcomes:
+
+  • call_outcome = "not_debtor" / "invalid_number" / "wrong_number"
+    → Search goal: FIND DIRECT CONTACT POINTS
+    → The debtor's phone number is wrong or belongs to someone else. They are NOT necessarily avoiding.
+    → Priority findings: email addresses, social media profiles, alternative phone numbers, personal websites.
+    → Negotiation angles should focus on: "We'd like to reach you through a better channel" — cooperative tone.
+
+  • call_outcome = "rings_out" / "busy" / "voicemail" / "answered_refused"
+    → Search goal: FIND EXTERNAL CONTACT POINTS
+    → The debtor's phone works but they are not engaging. They may be avoiding.
+    → Priority findings: employer name + HR contact, professional association membership, business partnerships, family connections.
+    → Negotiation angles should focus on: "We can reach you through your employer/association" — escalation leverage.
+
+  • call_outcome = "answered_negotiating" / "unknown"
+    → Search goal: BALANCED
+    → Collect all available intelligence to support ongoing negotiation.
+
+  IMPORTANT: Frame your findings and negotiation_angles through the lens of the search goal.
+  If goal is FIND DIRECT CONTACT, highlight any discovered email, social profile, or alt phone prominently.
+  If goal is FIND EXTERNAL CONTACT, highlight employer details, professional memberships, business roles.
 
 JSON schema:
 {
@@ -70,9 +94,16 @@ export async function synthesise(
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
   const availableDataPoints = extractDataPoints(row).map((dp) => dp.field);
+  const searchGoal = deriveSearchGoal(row.call_outcome);
 
   const userPayload = {
     case: row,
+    search_goal: searchGoal,
+    call_context: {
+      outcome: row.call_outcome,
+      attempts: row.call_attempts,
+      interpretation: callOutcomeInterpretation(row.call_outcome, searchGoal),
+    },
     available_data_points: availableDataPoints,
     evidence: evidence.map((e) => ({
       id: e.id,
@@ -141,6 +172,17 @@ function enforceCitations(b: Briefing, evidence: Evidence[]): Briefing {
   return { ...b, findings };
 }
 
+function callOutcomeInterpretation(outcome: string, goal: SearchGoal): string {
+  switch (goal) {
+    case "find_direct_contact":
+      return `Call outcome "${outcome}" indicates bad contact info — debtor is unreachable but not necessarily avoiding. Priority: find direct contact points (email, social, alt phone).`;
+    case "find_external_contact":
+      return `Call outcome "${outcome}" indicates the debtor's phone works but they are not engaging — likely avoiding. Priority: find external contact points (employer, professional associations, business connections).`;
+    default:
+      return `Call outcome "${outcome}" — debtor is engaged or status unclear. Balanced intelligence gathering.`;
+  }
+}
+
 function heuristicBriefing(row: CaseRow, evidence: Evidence[], gaps: Gap[]): Briefing {
   const topBySignal = new Map<string, Evidence>();
   for (const e of evidence) {
@@ -165,14 +207,22 @@ function heuristicBriefing(row: CaseRow, evidence: Evidence[], gaps: Gap[]): Bri
   });
 
   const highConfCount = evidence.filter((e) => e.pairing_confidence === "high" || e.pairing_confidence === "very_high").length;
+  const searchGoal = deriveSearchGoal(row.call_outcome);
+
+  const angles: string[] = [
+    `Debt profile: €${row.debt_eur} ${row.debt_origin}, ${row.debt_age_months}mo old, ${row.call_attempts} prior calls (${row.call_outcome}).`,
+  ];
+  if (searchGoal === "find_direct_contact") {
+    angles.push("Contact info unreliable — prioritise any discovered email, social media profile, or alternative phone number to establish a working channel.");
+  } else if (searchGoal === "find_external_contact") {
+    angles.push("Debtor likely avoiding calls — leverage any employer, professional association, or business connection discovered to reach them through a third party.");
+  }
 
   return {
     case_id: row.case_id,
-    summary: `Heuristic briefing (no LLM). ${evidence.length} evidence items across ${topBySignal.size} signal types. ${highConfCount} high-confidence paired matches.`,
+    summary: `Heuristic briefing (no LLM). ${evidence.length} evidence items across ${topBySignal.size} signal types. ${highConfCount} high-confidence paired matches. Search goal: ${searchGoal}.`,
     findings,
-    negotiation_angles: [
-      `Debt profile: €${row.debt_eur} ${row.debt_origin}, ${row.debt_age_months}mo old, ${row.call_attempts} prior calls (${row.call_outcome}).`,
-    ],
+    negotiation_angles: angles,
     gaps,
     overall_confidence: highConfCount >= 2 ? "high" : findings.length >= 2 ? "medium" : "low",
     generated_at: new Date().toISOString(),

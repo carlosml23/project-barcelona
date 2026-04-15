@@ -43,7 +43,7 @@ export async function runSearchFanOut(row: CaseRow): Promise<SearchRunResult> {
     case_id: row.case_id,
     agent: "orchestrator",
     kind: "plan",
-    message: `playbook=${playbook.label} recipes=${playbook.recipes.length} queries=${flatQueries.length} dataPoints=${dataPoints.length}`,
+    message: `playbook=${playbook.label} goal=${ctx.search_goal} recipes=${playbook.recipes.length} queries=${flatQueries.length} dataPoints=${dataPoints.length}`,
     data: {
       recipes: playbook.recipes.map((r) => r.id),
       queries: flatQueries.map((fq) => ({ recipe: fq.recipe.id, priority: fq.variant.priority })),

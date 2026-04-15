@@ -11,4 +11,4 @@ export function getPlaybook(country: string): Playbook {
 }
 
 export { DEFAULT_PLAYBOOK, ES };
-export type { Playbook, SourceRecipe, PlaybookCtx, QueryVariant } from "./types.js";
+export type { Playbook, SourceRecipe, PlaybookCtx, QueryVariant, SearchGoal } from "./types.js";

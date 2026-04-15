@@ -1,4 +1,5 @@
 import { env } from "../config/env.js";
+import { withResilience } from "./resilience.js";
 
 export interface ScrapeResult {
   url: string;
@@ -17,9 +18,12 @@ interface FirecrawlScrapeResponse {
   error?: string;
 }
 
-export async function firecrawlScrape(url: string): Promise<ScrapeResult> {
+const FIRECRAWL_TIMEOUT_MS = 30_000; // Longer timeout for JS-rendered pages
+
+async function firecrawlScrapeInternal(url: string, signal: AbortSignal): Promise<ScrapeResult> {
   const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
     method: "POST",
+    signal,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${env.FIRECRAWL}`,
@@ -40,4 +44,12 @@ export async function firecrawlScrape(url: string): Promise<ScrapeResult> {
     retrieved_at: new Date().toISOString(),
     raw: data,
   };
+}
+
+export async function firecrawlScrape(url: string): Promise<ScrapeResult> {
+  return withResilience(
+    "firecrawl",
+    (signal) => firecrawlScrapeInternal(url, signal),
+    { timeoutMs: FIRECRAWL_TIMEOUT_MS },
+  );
 }

@@ -1,6 +1,9 @@
-import type { Evidence, Gap, TraceEvent } from "../state/types.js";
+import type { Evidence, Gap, TraceEvent, PairingConfidence } from "../state/types.js";
 
 const MIN_MATCH = 0.5;
+
+/** Pairing confidence levels that bypass the numeric threshold. */
+const ALWAYS_KEEP: ReadonlySet<PairingConfidence> = new Set(["very_high", "high"]);
 
 export interface VerifyResult {
   kept: Evidence[];
@@ -17,11 +20,13 @@ export function verifyEvidence(case_id: string, all: Evidence[]): VerifyResult {
   const kept: Evidence[] = [];
   const dropped: Evidence[] = [];
   for (const e of all) {
-    if (e.identity_match_score >= MIN_MATCH) kept.push(e);
+    if (shouldKeep(e)) kept.push(e);
     else dropped.push(e);
   }
 
-  const high_confidence_count = kept.filter((e) => e.identity_match_score >= 0.85).length;
+  const high_confidence_count = kept.filter(
+    (e) => e.pairing_confidence === "very_high" || e.pairing_confidence === "high",
+  ).length;
 
   const byAgent = new Map<string, Evidence[]>();
   for (const e of all) {
@@ -32,19 +37,19 @@ export function verifyEvidence(case_id: string, all: Evidence[]): VerifyResult {
 
   const gaps: Gap[] = [];
   for (const [agent, list] of byAgent) {
-    const kept_here = list.filter((e) => e.identity_match_score >= MIN_MATCH);
-    if (kept_here.length === 0) {
-      const pairsSearched = list.flatMap((e) => e.matched_data_points);
-      const uniquePairs = [...new Set(pairsSearched)];
-      const pairInfo = uniquePairs.length > 0
-        ? ` (matched fields in results: ${uniquePairs.join(", ")})`
+    const keptHere = list.filter(shouldKeep);
+    if (keptHere.length === 0) {
+      const matchedFields = list.flatMap((e) => e.matched_data_points);
+      const uniqueFields = [...new Set(matchedFields)];
+      const fieldInfo = uniqueFields.length > 0
+        ? ` (matched fields: ${uniqueFields.join(", ")})`
         : "";
       gaps.push({
         what_we_tried: agent,
         why_not_found:
           list.length === 0
             ? "no results from source"
-            : `${list.length} results returned, none reached data-point pairing confidence ≥ ${MIN_MATCH}${pairInfo}`,
+            : `${list.length} results, none reached pairing confidence threshold${fieldInfo}`,
         sources_checked: [...new Set(list.map((e) => e.source))],
       });
     }
@@ -56,8 +61,18 @@ export function verifyEvidence(case_id: string, all: Evidence[]): VerifyResult {
     agent: "verifier",
     kind: "decision",
     message: `kept=${kept.length} dropped=${dropped.length} gaps=${gaps.length} high_confidence=${high_confidence_count}`,
-    data: { thresholds: { min_match: MIN_MATCH }, high_confidence_count },
+    data: { thresholds: { min_match: MIN_MATCH, always_keep: [...ALWAYS_KEEP] }, high_confidence_count },
   });
 
   return { kept, dropped, gaps, high_confidence_count, trace };
+}
+
+/**
+ * Decide whether to keep evidence based on pairing confidence and score.
+ * - very_high / high pairing confidence → always keep (DNI match, name+phone, etc.)
+ * - Otherwise → fall back to numeric score threshold
+ */
+function shouldKeep(e: Evidence): boolean {
+  if (ALWAYS_KEEP.has(e.pairing_confidence)) return true;
+  return e.identity_match_score >= MIN_MATCH;
 }

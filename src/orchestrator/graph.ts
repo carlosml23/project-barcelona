@@ -1,8 +1,11 @@
-import type { CaseRow, CaseState, TraceEvent } from "../state/types.js";
+import type { CaseRow, CaseState, Evidence, Gap, TraceEvent } from "../state/types.js";
 import { runSearchFanOut } from "../agents/search.js";
+import { discoverEvidence } from "../agents/discovery.js";
 import { verifyEvidence } from "../agents/verifier.js";
+import { refineEvidence } from "../agents/refiner.js";
 import { synthesise } from "../agents/synthesiser.js";
 import { store } from "../state/store.js";
+import { env } from "../config/env.js";
 
 export interface RunOptions {
   persist?: boolean;
@@ -17,66 +20,96 @@ export async function runCase(row: CaseRow, opts: RunOptions = {}): Promise<Case
   const log = (m: string): void => onTrace?.(m);
   const emit = (t: TraceEvent): void => onTraceEvent?.(t);
 
-  const orchestratorEvent: TraceEvent = {
-    ts: new Date().toISOString(),
-    case_id: row.case_id,
-    agent: "orchestrator",
-    kind: "plan",
-    message: `fan-out for ${row.full_name} (${row.country})`,
-  };
-  log(`[orchestrator] fan-out for ${row.full_name} (${row.country})`);
-  emit(orchestratorEvent);
+  // ── Stage 0 + 1: Discovery + Fan-out in parallel ─────────────────────
+  const shouldRunDiscovery = Boolean(env.ANTHROPIC_API_KEY) && env.DISCOVERY_ENABLED;
+  log(`[orchestrator] fan-out for ${row.full_name} (${row.country})${shouldRunDiscovery ? " + agentic discovery" : ""}`);
 
-  const search = await runSearchFanOut(row);
-  for (const t of search.trace) {
-    log(`[${t.agent}:${t.kind}] ${t.message}`);
-    emit(t);
+  const [discoveryResult, searchResult] = await Promise.all([
+    shouldRunDiscovery
+      ? discoverEvidence(row)
+      : Promise.resolve({ evidence: [] as Evidence[], trace: [] }),
+    runSearchFanOut(row),
+  ]);
+
+  for (const t of discoveryResult.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
+  for (const t of searchResult.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
+
+  // Merge and deduplicate evidence from both stages
+  const mergedEvidence = deduplicateEvidence([
+    ...discoveryResult.evidence,
+    ...searchResult.evidence,
+  ]);
+  log(`[orchestrator] merged ${mergedEvidence.length} evidence (discovery: ${discoveryResult.evidence.length}, fan-out: ${searchResult.evidence.length})`);
+
+  // ── Stage 2: Verify initial evidence ─────────────────────────────────
+  log(`[verifier] scoring ${mergedEvidence.length} hits`);
+  const verified = verifyEvidence(row.case_id, mergedEvidence);
+  for (const t of verified.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
+
+  // ── Stage 3: Agentic refinement (if API key available) ───────────────
+  let allEvidence: Evidence[] = verified.kept;
+  let allGaps: Gap[] = verified.gaps;
+  let refinementTrace = [...discoveryResult.trace, ...searchResult.trace, ...verified.trace];
+
+  if (env.ANTHROPIC_API_KEY) {
+    log(`[refiner] reviewing ${verified.kept.length} evidence, ${verified.gaps.length} gaps`);
+    const refined = await refineEvidence(row, verified.kept, verified.gaps);
+    for (const t of refined.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
+    refinementTrace = refinementTrace.concat(refined.trace);
+
+    if (refined.additionalEvidence.length > 0) {
+      log(`[verifier] re-verifying ${refined.additionalEvidence.length} new evidence from refiner`);
+      const reVerified = verifyEvidence(row.case_id, refined.additionalEvidence);
+      for (const t of reVerified.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
+      refinementTrace = refinementTrace.concat(reVerified.trace);
+
+      allEvidence = [...verified.kept, ...reVerified.kept];
+      allGaps = mergeGaps(verified.gaps, reVerified.gaps);
+    }
   }
 
-  const verifierStartEvent: TraceEvent = {
-    ts: new Date().toISOString(),
-    case_id: row.case_id,
-    agent: "verifier",
-    kind: "plan",
-    message: `scoring ${search.evidence.length} hits`,
-  };
-  log(`[verifier] scoring ${search.evidence.length} hits`);
-  emit(verifierStartEvent);
+  // ── Stage 4: Synthesise briefing ─────────────────────────────────────
+  log(`[synthesiser] building briefing from ${allEvidence.length} evidence (${allGaps.length} gaps)`);
+  const synth = await synthesise(row, allEvidence, allGaps);
+  for (const t of synth.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
 
-  const verified = verifyEvidence(row.case_id, search.evidence);
-  for (const t of verified.trace) {
-    log(`[${t.agent}:${t.kind}] ${t.message}`);
-    emit(t);
-  }
-
-  const synthStartEvent: TraceEvent = {
-    ts: new Date().toISOString(),
-    case_id: row.case_id,
-    agent: "synthesiser",
-    kind: "plan",
-    message: `building briefing from ${verified.kept.length} kept evidence (${verified.high_confidence_count} high-confidence)`,
-  };
-  log(`[synthesiser] building briefing from ${verified.kept.length} kept evidence (${verified.high_confidence_count} high-confidence)`);
-  emit(synthStartEvent);
-
-  const synth = await synthesise(row, verified.kept, verified.gaps);
-  for (const t of synth.trace) {
-    log(`[${t.agent}:${t.kind}] ${t.message}`);
-    emit(t);
-  }
-
-  const fullTrace = [orchestratorEvent, ...search.trace, verifierStartEvent, ...verified.trace, synthStartEvent, ...synth.trace];
+  const fullTrace = [...refinementTrace, ...synth.trace];
 
   if (persist) {
-    for (const e of search.evidence) store.saveEvidence(e);
+    for (const e of mergedEvidence) store.saveEvidence(e);
     for (const t of fullTrace) store.saveTrace(t);
     store.saveBriefing(synth.briefing);
   }
 
   return {
     case: row,
-    evidence: verified.kept,
+    evidence: allEvidence,
     trace: fullTrace,
     briefing: synth.briefing,
   };
+}
+
+/** Deduplicate evidence by URL, keeping the copy with the higher identity_match_score. */
+function deduplicateEvidence(all: Evidence[]): Evidence[] {
+  const seen = new Map<string, Evidence>();
+  for (const e of all) {
+    const existing = seen.get(e.url);
+    if (!existing || e.identity_match_score > existing.identity_match_score) {
+      seen.set(e.url, e);
+    }
+  }
+  return [...seen.values()];
+}
+
+/** Merge gaps from initial verification and re-verification, deduplicating by agent. */
+function mergeGaps(initial: Gap[], additional: Gap[]): Gap[] {
+  const seen = new Set(initial.map((g) => g.what_we_tried));
+  const merged = [...initial];
+  for (const g of additional) {
+    if (!seen.has(g.what_we_tried)) {
+      merged.push(g);
+      seen.add(g.what_we_tried);
+    }
+  }
+  return merged;
 }

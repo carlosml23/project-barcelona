@@ -23,7 +23,7 @@ export async function runCase(row: CaseRow, opts: RunOptions = {}): Promise<Case
   const verified = verifyEvidence(row.case_id, search.evidence);
   for (const t of verified.trace) log(`[${t.agent}:${t.kind}] ${t.message}`);
 
-  log(`[synthesiser] building briefing from ${verified.kept.length} kept evidence`);
+  log(`[synthesiser] building briefing from ${verified.kept.length} kept evidence (${verified.high_confidence_count} high-confidence)`);
   const synth = await synthesise(row, verified.kept, verified.gaps);
   for (const t of synth.trace) log(`[${t.agent}:${t.kind}] ${t.message}`);
 

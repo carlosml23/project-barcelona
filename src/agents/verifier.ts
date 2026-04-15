@@ -6,6 +6,7 @@ export interface VerifyResult {
   kept: Evidence[];
   dropped: Evidence[];
   gaps: Gap[];
+  high_confidence_count: number;
   trace: TraceEvent[];
 }
 
@@ -20,6 +21,8 @@ export function verifyEvidence(case_id: string, all: Evidence[]): VerifyResult {
     else dropped.push(e);
   }
 
+  const high_confidence_count = kept.filter((e) => e.identity_match_score >= 0.85).length;
+
   const byAgent = new Map<string, Evidence[]>();
   for (const e of all) {
     const list = byAgent.get(e.agent) ?? [];
@@ -31,12 +34,17 @@ export function verifyEvidence(case_id: string, all: Evidence[]): VerifyResult {
   for (const [agent, list] of byAgent) {
     const kept_here = list.filter((e) => e.identity_match_score >= MIN_MATCH);
     if (kept_here.length === 0) {
+      const pairsSearched = list.flatMap((e) => e.matched_data_points);
+      const uniquePairs = [...new Set(pairsSearched)];
+      const pairInfo = uniquePairs.length > 0
+        ? ` (matched fields in results: ${uniquePairs.join(", ")})`
+        : "";
       gaps.push({
         what_we_tried: agent,
         why_not_found:
           list.length === 0
             ? "no results from source"
-            : `${list.length} results returned, none matched the debtor's name with confidence ≥ ${MIN_MATCH}`,
+            : `${list.length} results returned, none reached data-point pairing confidence ≥ ${MIN_MATCH}${pairInfo}`,
         sources_checked: [...new Set(list.map((e) => e.source))],
       });
     }
@@ -47,9 +55,9 @@ export function verifyEvidence(case_id: string, all: Evidence[]): VerifyResult {
     case_id,
     agent: "verifier",
     kind: "decision",
-    message: `kept=${kept.length} dropped=${dropped.length} gaps=${gaps.length}`,
-    data: { thresholds: { min_match: MIN_MATCH } },
+    message: `kept=${kept.length} dropped=${dropped.length} gaps=${gaps.length} high_confidence=${high_confidence_count}`,
+    data: { thresholds: { min_match: MIN_MATCH }, high_confidence_count },
   });
 
-  return { kept, dropped, gaps, trace };
+  return { kept, dropped, gaps, high_confidence_count, trace };
 }

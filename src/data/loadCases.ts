@@ -22,6 +22,13 @@ export function loadCasesFromCsv(path: string): CaseRow[] {
       legal_asset_finding: r.legal_asset_finding,
       full_name: r.full_name,
       phone: r.phone || undefined,
+      email: r.email || undefined,
+      dni_nie: r.dni_nie || undefined,
+      provincia: r.provincia || undefined,
+      employer: r.employer || undefined,
+      autonomo: r.autonomo === "true" ? true : r.autonomo === "false" ? false : undefined,
+      city: r.city || undefined,
+      postal_code: r.postal_code || undefined,
     }),
   );
 }

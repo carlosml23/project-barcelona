@@ -1,19 +1,15 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FileText, Lightbulb, AlertTriangle, Copy, Check } from "lucide-react";
+import { Lightbulb, CheckCircle2, Copy, Check } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { EvidenceList } from "@/components/evidence-list";
-import { GapsSection } from "@/components/gaps-section";
-import type { Briefing, Evidence } from "@/lib/types";
+import type { Briefing } from "@/lib/types";
 
-interface BriefingCardProps {
+interface BriefingReportProps {
   briefing: Briefing;
-  evidence: Evidence[];
 }
 
 function ConfidenceBadge({ confidence }: { confidence: string }) {
@@ -22,10 +18,9 @@ function ConfidenceBadge({ confidence }: { confidence: string }) {
     medium: "bg-amber-500/15 text-amber-400 border-amber-500/30",
     low: "bg-red-500/15 text-red-400 border-red-500/30",
   };
-
   return (
-    <Badge variant="outline" className={`text-[10px] ${styles[confidence] ?? styles.low}`}>
-      {confidence}
+    <Badge variant="outline" className={`text-xs ${styles[confidence] ?? styles.low}`}>
+      {confidence} confidence
     </Badge>
   );
 }
@@ -41,7 +36,6 @@ function SignalBadge({ type }: { type: string }) {
     registry: "bg-cyan-500/15 text-cyan-400",
     subsidy: "bg-yellow-500/15 text-yellow-400",
   };
-
   return (
     <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${styles[type] ?? "bg-muted text-muted-foreground"}`}>
       {type}
@@ -49,7 +43,7 @@ function SignalBadge({ type }: { type: string }) {
   );
 }
 
-export function BriefingCard({ briefing, evidence }: BriefingCardProps) {
+export function BriefingReport({ briefing }: BriefingReportProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -60,89 +54,67 @@ export function BriefingCard({ briefing, evidence }: BriefingCardProps) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: "easeOut" }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
+      className="space-y-5"
     >
-      <Card className="border-primary/20">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-              <FileText className="h-4 w-4 text-primary" />
-              Briefing
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <ConfidenceBadge confidence={briefing.overall_confidence} />
-              <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2">
-                {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+          <h2 className="text-base font-semibold text-foreground">Investigation Complete</h2>
+          <ConfidenceBadge confidence={briefing.overall_confidence} />
+        </div>
+        <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2 gap-1 text-xs text-muted-foreground">
+          {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
 
-        <CardContent className="space-y-4">
-          {/* Summary */}
-          <p className="text-sm text-foreground leading-relaxed">{briefing.summary}</p>
+      {/* Summary */}
+      <p className="text-sm leading-relaxed text-foreground/90">
+        {briefing.summary}
+      </p>
 
-          <Separator className="bg-border/50" />
+      <Separator className="bg-border/40" />
 
-          {/* Findings */}
-          {briefing.findings.length > 0 && (
-            <div>
-              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                Findings
-              </h4>
-              <div className="space-y-2">
-                {briefing.findings.map((f, i) => (
-                  <div key={i} className="p-2.5 rounded-md bg-secondary/50 border border-border/30">
-                    <div className="flex items-center gap-2 mb-1">
-                      <SignalBadge type={f.signal_type} />
-                      <ConfidenceBadge confidence={f.confidence} />
-                      <span className="text-[10px] text-muted-foreground">
-                        {f.evidence_ids.length} source{f.evidence_ids.length !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                    <p className="text-sm text-foreground/90">{f.claim}</p>
-                  </div>
-                ))}
+      {/* Findings */}
+      {briefing.findings.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Findings
+          </h3>
+          <div className="space-y-2">
+            {briefing.findings.map((f, i) => (
+              <div key={i} className="p-3 rounded-lg bg-secondary/40 border border-border/20">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <SignalBadge type={f.signal_type} />
+                  <ConfidenceBadge confidence={f.confidence} />
+                </div>
+                <p className="text-sm text-foreground/85 leading-relaxed">{f.claim}</p>
               </div>
-            </div>
-          )}
+            ))}
+          </div>
+        </div>
+      )}
 
-          {/* Negotiation Angles */}
-          {briefing.negotiation_angles.length > 0 && (
-            <div>
-              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Lightbulb className="h-3 w-3 text-primary" />
-                Negotiation Angles
-              </h4>
-              <ul className="space-y-1.5">
-                {briefing.negotiation_angles.map((angle, i) => (
-                  <li key={i} className="text-sm text-foreground/80 pl-3 border-l-2 border-primary/30">
-                    {angle}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Gaps */}
-          {briefing.gaps.length > 0 && (
-            <>
-              <Separator className="bg-border/50" />
-              <GapsSection gaps={briefing.gaps} />
-            </>
-          )}
-
-          {/* Evidence */}
-          {evidence.length > 0 && (
-            <>
-              <Separator className="bg-border/50" />
-              <EvidenceList evidence={evidence} />
-            </>
-          )}
-        </CardContent>
-      </Card>
+      {/* Negotiation Angles */}
+      {briefing.negotiation_angles.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+            <Lightbulb className="h-3 w-3 text-primary" />
+            Negotiation Angles
+          </h3>
+          <div className="space-y-1.5">
+            {briefing.negotiation_angles.map((angle, i) => (
+              <p key={i} className="text-sm text-foreground/80 pl-3 border-l-2 border-primary/30 leading-relaxed">
+                {angle}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

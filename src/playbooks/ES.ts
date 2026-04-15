@@ -478,15 +478,45 @@ const recipes: SourceRecipe[] = [
     },
     "external",
     (ctx, gp) => {
+      // Search with each name variant — people often use shortened names on LinkedIn
       const location = ctx.city ?? "Spain";
-      const query = ctx.employer
-        ? `"${ctx.full_name}" "${ctx.employer}" ${location} site:linkedin.com/in`
-        : `"${ctx.full_name}" ${location} site:linkedin.com/in`;
+      const employer = ctx.employer ?? "";
+      const seen = new Set<string>();
+      const queries = [];
+
+      for (const variant of ctx.name_variants) {
+        const q = `${variant} ${employer} ${location} site:linkedin.com/in`.replace(/\s+/g, " ").trim();
+        if (seen.has(q)) continue;
+        seen.add(q);
+        queries.push({
+          query: q,
+          includeDomains: ["linkedin.com"],
+          priority: gp(variant === ctx.full_name.toLowerCase() ? 2 : 3),
+          requires_fields: [],
+          target_pairs: [["full_name", "employer"], ["full_name", "city"]],
+        });
+      }
+      return queries;
+    },
+  ),
+  buildRecipe(
+    {
+      id: "linkedin_es_web",
+      label: "LinkedIn profile via web search (name variants)",
+      signal_type: "employment",
+      tool: "tavily",
+      can_verify_pairs: [["full_name", "employer"], ["full_name", "city"]],
+    },
+    "external",
+    (ctx, gp) => {
+      // Tavily web search catches LinkedIn profiles that Exa's neural search misses.
+      const shortVariant = ctx.name_variants.find((v) => v !== ctx.full_name.toLowerCase()) ?? ctx.full_name;
+      const location = ctx.city ?? "Spain";
       return [
         {
-          query,
+          query: `"${shortVariant}" ${location} site:linkedin.com/in`,
           includeDomains: ["linkedin.com"],
-          priority: gp(2),
+          priority: gp(3),
           requires_fields: [],
           target_pairs: [["full_name", "employer"], ["full_name", "city"]],
         },

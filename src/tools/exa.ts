@@ -1,4 +1,5 @@
 import { env } from "../config/env.js";
+import { withResilience } from "./resilience.js";
 
 export interface SearchHit {
   url: string;
@@ -31,12 +32,14 @@ export interface ExaSearchOptions {
   category?: "company" | "linkedin profile" | "news" | "personal site" | "research paper";
 }
 
-export async function exaSearch(
+async function exaSearchInternal(
   query: string,
-  opts: ExaSearchOptions = {},
+  opts: ExaSearchOptions,
+  signal: AbortSignal,
 ): Promise<SearchHit[]> {
   const res = await fetch("https://api.exa.ai/search", {
     method: "POST",
+    signal,
     headers: {
       "Content-Type": "application/json",
       "x-api-key": env.EXA_API,
@@ -63,4 +66,11 @@ export async function exaSearch(
     retrieved_at: ts,
     raw: r,
   }));
+}
+
+export async function exaSearch(
+  query: string,
+  opts: ExaSearchOptions = {},
+): Promise<SearchHit[]> {
+  return withResilience("exa", (signal) => exaSearchInternal(query, opts, signal));
 }

@@ -15,7 +15,7 @@ OSINT multi-agent system built for the Vexor hackathon. Given a debtor (name, co
 - **Language:** TypeScript (ESM, Node ≥20)
 - **Runtime:** tsx for dev, `tsc` for build
 - **LLM:** Anthropic SDK — Claude Sonnet 4.5 as orchestrator/synthesiser (heuristic fallback if `ANTHROPIC_API_KEY` is absent)
-- **Search/scraping:** Exa (neural search, LinkedIn), Tavily (web + news), Firecrawl (JS-heavy page extraction)
+- **Search/scraping:** Exa (neural search, LinkedIn), Tavily (web + news), Firecrawl (JS-heavy page extraction), Claude web_search + web_fetch (agentic discovery, location-aware)
 - **Database:** SQLite via `better-sqlite3` (cases, evidence, traces, briefings)
 - **Validation:** Zod at every boundary
 - **Package manager:** npm
@@ -26,13 +26,22 @@ OSINT multi-agent system built for the Vexor hackathon. Given a debtor (name, co
 CLI (runOne / runCase)
         │
         ▼
-Orchestrator  ──► Search fan-out (parallel recipes: Exa | Tavily | Firecrawl)
+Orchestrator
+   ├──► Agentic Discovery (Claude web_search + web_fetch, location-aware)  ──┐
+   │                                                                         │ parallel
+   └──► Search fan-out (parallel recipes: Exa | Tavily | Firecrawl)       ──┘
+                        │
+                        ▼
+                Deduplicate + Merge evidence
                         │
                         ▼
                 Evidence Store (SQLite)
                         │
                         ▼
                 Verifier (identity-match score, gap detection)
+                        │
+                        ▼
+                Refiner (Claude + 5 tools: search_web, search_neural, scrape_page, web_search, web_fetch)
                         │
                         ▼
                 Synthesiser (Claude, cite-or-omit JSON)
@@ -49,6 +58,8 @@ Orchestrator  ──► Search fan-out (parallel recipes: Exa | Tavily | Firecra
 | `src/state/types.ts` | Zod schemas: `CaseRow`, `Evidence`, `Briefing`, `TraceEvent`, `CaseState` |
 | `src/state/store.ts` | SQLite persistence (cases, evidence, traces, briefings) |
 | `src/tools/{exa,tavily,firecrawl}.ts` | Typed tool wrappers returning citation-ready `SearchHit` rows |
+| `src/tools/serverTools.ts` | Claude web_search/web_fetch server-side tool helpers, location-aware defs, response extractors |
+| `src/agents/discovery.ts` | Agentic discovery agent (Stage 0) — broad web search via Claude server-side tools |
 | `src/playbooks/{ES,default}.ts` | Country-aware source recipes |
 | `src/agents/identity.ts` | Name normalisation + phone→country hinting |
 | `src/agents/search.ts` | Parallel recipe fan-out with full trace |

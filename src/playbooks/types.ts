@@ -22,6 +22,8 @@ export type SearchGoal = "find_direct_contact" | "find_external_contact" | "bala
 
 export interface PlaybookCtx {
   full_name: string;
+  /** Common name variants for search (e.g., dropping middle name for Spanish names). */
+  name_variants: string[];
   country: string;
   city?: string;
   postal_code?: string;

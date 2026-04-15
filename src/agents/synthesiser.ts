@@ -4,7 +4,7 @@ import { env } from "../config/env.js";
 import { extractDataPoints, deriveSearchGoal } from "./identity.js";
 import type { SearchGoal } from "../playbooks/types.js";
 
-const MODEL = "claude-sonnet-4-5-20250929";
+const MODEL = "claude-sonnet-4-6";
 
 const SYSTEM_PROMPT = `You are the Briefing Synthesiser for a debt-recovery OSINT agent used by a European debt servicer.
 

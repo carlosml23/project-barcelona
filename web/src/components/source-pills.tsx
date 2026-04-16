@@ -28,11 +28,11 @@ export function SourcePills({ sources }: SourcePillsProps) {
   const overflow = sources.length - MAX_VISIBLE;
 
   return (
-    <div className="space-y-2">
-      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+    <div className="space-y-2.5">
+      <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">
         Sources found
       </p>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-2">
         <AnimatePresence mode="popLayout">
           {visible.map((src) => (
             <motion.span
@@ -40,7 +40,7 @@ export function SourcePills({ sources }: SourcePillsProps) {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.2 }}
-              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${SIGNAL_COLORS[src.signalType] ?? SIGNAL_COLORS.other}`}
+              className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium border ${SIGNAL_COLORS[src.signalType] ?? SIGNAL_COLORS.other}`}
             >
               {src.domain}
             </motion.span>
@@ -49,7 +49,7 @@ export function SourcePills({ sources }: SourcePillsProps) {
             <motion.span
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-muted text-muted-foreground"
+              className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-muted text-muted-foreground"
             >
               +{overflow} more
             </motion.span>

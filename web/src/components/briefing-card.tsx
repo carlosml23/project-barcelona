@@ -15,9 +15,9 @@ interface BriefingReportProps {
 
 function ConfidenceBadge({ confidence }: { confidence: string }) {
   const styles: Record<string, string> = {
-    high: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-    medium: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-    low: "bg-red-500/15 text-red-400 border-red-500/30",
+    high: "bg-emerald-100 text-emerald-800 border-emerald-300",
+    medium: "bg-amber-100 text-amber-800 border-amber-400",
+    low: "bg-red-100 text-red-800 border-red-300",
   };
   return (
     <Badge variant="outline" className={`text-xs ${styles[confidence] ?? styles.low}`}>
@@ -28,26 +28,26 @@ function ConfidenceBadge({ confidence }: { confidence: string }) {
 
 function SignalBadge({ type }: { type: string }) {
   const styles: Record<string, string> = {
-    employment: "bg-blue-500/15 text-blue-400",
-    business: "bg-purple-500/15 text-purple-400",
-    asset: "bg-emerald-500/15 text-emerald-400",
-    legal: "bg-red-500/15 text-red-400",
-    social: "bg-pink-500/15 text-pink-400",
-    news: "bg-orange-500/15 text-orange-400",
-    registry: "bg-cyan-500/15 text-cyan-400",
-    subsidy: "bg-yellow-500/15 text-yellow-400",
+    employment: "bg-blue-100 text-blue-800",
+    business: "bg-purple-100 text-purple-800",
+    asset: "bg-emerald-100 text-emerald-800",
+    legal: "bg-red-100 text-red-800",
+    social: "bg-pink-100 text-pink-800",
+    news: "bg-orange-100 text-orange-800",
+    registry: "bg-cyan-100 text-cyan-800",
+    subsidy: "bg-yellow-100 text-yellow-800",
   };
   return (
-    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${styles[type] ?? "bg-muted text-muted-foreground"}`}>
+    <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${styles[type] ?? "bg-muted text-muted-foreground"}`}>
       {type}
     </span>
   );
 }
 
 function confidenceColor(score: number): string {
-  if (score >= 0.75) return "text-emerald-400";
-  if (score >= 0.5) return "text-amber-400";
-  return "text-red-400";
+  if (score >= 0.75) return "text-emerald-700";
+  if (score >= 0.5) return "text-amber-700";
+  return "text-red-700";
 }
 
 function NegotiationAngleTabs({
@@ -82,13 +82,13 @@ function NegotiationAngleTabs({
                 onClick={() => setActiveTab(i)}
                 className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                   i === activeTab
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "border border-border/50 text-muted-foreground hover:text-foreground hover:bg-secondary hover:border-border"
                 }`}
               >
                 <span className="truncate max-w-[200px]">{label}</span>
                 {score != null && (
-                  <span className={`tabular-nums ${i === activeTab ? confidenceColor(score) : ""}`}>
+                  <span className={`tabular-nums ${confidenceColor(score)}`}>
                     {Math.round(score * 100)}%
                   </span>
                 )}
@@ -127,19 +127,19 @@ export function BriefingReport({ briefing, candidates }: BriefingReportProps) {
     >
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-          <h2 className="text-base font-semibold text-foreground">Investigation Complete</h2>
+        <div className="flex items-center gap-2.5">
+          <CheckCircle2 className="h-5 w-5 text-emerald-700" />
+          <h2 className="text-lg font-semibold text-foreground">Investigation Complete</h2>
           <ConfidenceBadge confidence={briefing.overall_confidence} />
         </div>
-        <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2 gap-1 text-xs text-muted-foreground">
-          {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+        <Button variant="ghost" size="sm" onClick={handleCopy} className="h-8 px-2.5 gap-1.5 text-sm text-muted-foreground">
+          {copied ? <Check className="h-3.5 w-3.5 text-emerald-700" /> : <Copy className="h-3.5 w-3.5" />}
           {copied ? "Copied" : "Copy"}
         </Button>
       </div>
 
       {/* Summary */}
-      <p className="text-sm leading-relaxed text-foreground/90">
+      <p className="text-base leading-relaxed text-foreground/90">
         {briefing.summary}
       </p>
 
@@ -147,28 +147,32 @@ export function BriefingReport({ briefing, candidates }: BriefingReportProps) {
 
       {/* Findings */}
       {briefing.findings.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="space-y-2.5">
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
             Findings
           </h3>
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {briefing.findings.map((f, i) => (
-              <div key={i} className="p-3 rounded-lg bg-secondary/40 border border-border/20">
-                <div className="flex items-center gap-2 mb-1.5">
+              <div key={i} className="p-4 rounded-lg bg-secondary/40 border border-border/20">
+                <div className="flex items-center gap-2 mb-2">
                   <SignalBadge type={f.signal_type} />
                   <ConfidenceBadge confidence={f.confidence} />
                 </div>
-                <p className="text-sm text-foreground/85 leading-relaxed">{f.claim}</p>
+                <p className="text-base text-foreground/85 leading-relaxed">{f.claim}</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Negotiation Angles */}
-      {Object.keys(briefing.negotiation_angles).length > 0 && (
-        <NegotiationAngleTabs angles={briefing.negotiation_angles} candidates={candidates} />
-      )}
+      {/* Negotiation Angles — normalize legacy flat array format */}
+      {(() => {
+        const raw = briefing.negotiation_angles;
+        const angles: Record<string, string[]> = Array.isArray(raw) ? { General: raw } : raw;
+        return Object.keys(angles).length > 0 ? (
+          <NegotiationAngleTabs angles={angles} candidates={candidates} />
+        ) : null;
+      })()}
     </motion.div>
   );
 }

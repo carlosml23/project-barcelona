@@ -1,5 +1,15 @@
 import type { CaseRow } from "../state/types.js";
-import type { PlaybookCtx } from "../playbooks/types.js";
+import type { PlaybookCtx, SearchGoal } from "../playbooks/types.js";
+
+export type { SearchGoal } from "../playbooks/types.js";
+
+export function deriveSearchGoal(call_outcome: string): SearchGoal {
+  if (["not_debtor", "invalid_number", "wrong_number"].includes(call_outcome))
+    return "find_direct_contact";
+  if (["rings_out", "busy", "voicemail", "answered_refused"].includes(call_outcome))
+    return "find_external_contact";
+  return "balanced";
+}
 
 const PHONE_COUNTRY_HINTS: Record<string, string> = {
   "+34": "ES",
@@ -40,6 +50,10 @@ export function buildPlaybookCtx(row: CaseRow): PlaybookCtx {
     has_email: !!row.email,
     has_phone: !!row.phone,
     has_employer: !!row.employer,
+    search_goal: deriveSearchGoal(row.call_outcome),
+    call_outcome: row.call_outcome,
+    debt_origin: row.debt_origin,
+    debt_eur: row.debt_eur,
   };
 }
 

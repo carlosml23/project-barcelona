@@ -174,7 +174,13 @@ export const store = {
     const row = db
       .prepare(`SELECT briefing_json FROM briefings WHERE case_id = ?`)
       .get(case_id) as { briefing_json: string } | undefined;
-    return row ? JSON.parse(row.briefing_json) : null;
+    if (!row) return null;
+    const parsed = JSON.parse(row.briefing_json);
+    // Normalize old flat string[] format to Record<string, string[]>
+    if (Array.isArray(parsed.negotiation_angles)) {
+      return { ...parsed, negotiation_angles: { General: parsed.negotiation_angles } };
+    }
+    return parsed;
   },
   getCandidateReport(case_id: string): CandidateReport | null {
     const row = db

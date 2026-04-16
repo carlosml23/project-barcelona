@@ -29,3 +29,20 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Data (PII)
+data/cases.sample.csv
+.specific
+specific.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/

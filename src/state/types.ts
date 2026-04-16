@@ -8,6 +8,7 @@ export const CallOutcome = z.enum([
   "answered_refused",
   "answered_negotiating",
   "wrong_number",
+  "invalid_number",
   "unknown",
 ]);
 
@@ -25,6 +26,9 @@ export const DebtOrigin = z.enum([
   "consumer_loan",
   "credit_card",
   "utilities",
+  "auto_loan",
+  "sme_loan",
+  "utility",
   "other",
 ]);
 

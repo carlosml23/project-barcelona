@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, ChevronRight, FileText, AlertTriangle, List, Users } from "lucide-react";
+import { ChevronRight, FileText, AlertTriangle, List, Users } from "lucide-react";
 import { PhaseIndicator } from "@/components/phase-indicator";
 import { InvestigationSteps } from "@/components/investigation-steps";
 import { SourcePills } from "@/components/source-pills";
@@ -39,13 +39,13 @@ function CollapsibleSection({ label, count, icon: Icon, children }: CollapsibleS
     <div className="border border-border/30 rounded-lg overflow-hidden">
       <button
         onClick={() => setOpen((prev) => !prev)}
-        className="w-full flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors"
+        className="w-full flex items-center gap-2.5 px-5 py-3.5 text-base text-muted-foreground hover:text-foreground hover:bg-secondary/30 transition-colors"
       >
-        <Icon className="h-3.5 w-3.5" />
+        <Icon className="h-4 w-4" />
         <span className="font-medium">{label}</span>
-        <span className="text-xs">({count})</span>
+        <span className="text-sm">({count})</span>
         <ChevronRight
-          className={`h-3.5 w-3.5 ml-auto transition-transform duration-200 ${open ? "rotate-90" : ""}`}
+          className={`h-4 w-4 ml-auto transition-transform duration-200 ${open ? "rotate-90" : ""}`}
         />
       </button>
       <AnimatePresence initial={false}>
@@ -57,7 +57,7 @@ function CollapsibleSection({ label, count, icon: Icon, children }: CollapsibleS
             transition={{ duration: 0.2, ease: "easeInOut" }}
             className="overflow-hidden"
           >
-            <div className="px-4 pb-4 pt-1">
+            <div className="px-5 pb-5 pt-1">
               {children}
             </div>
           </motion.div>
@@ -89,12 +89,11 @@ function CandidateReportSummary({ report }: { report: CandidateReport }) {
 function IdleState() {
   return (
     <div className="flex-1 flex items-center justify-center">
-      <div className="text-center space-y-3 max-w-md">
-        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
-          <Search className="w-8 h-8 text-primary" />
-        </div>
-        <h2 className="text-lg font-semibold text-foreground">Ready to Investigate</h2>
-        <p className="text-sm text-muted-foreground">
+      <div className="text-center space-y-4 max-w-md">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/sherlock-logo.svg" alt="" width={128} height={128} className="mx-auto opacity-25" />
+        <h2 className="text-xl font-semibold text-foreground">Who should we investigate today?</h2>
+        <p className="text-base text-muted-foreground">
           Fill in the subject details on the left and click Investigate to begin.
           Each agent&apos;s work will be shown here in real-time.
         </p>
@@ -125,14 +124,14 @@ export function InvestigationView({
   const displayCandidateReport = caseState?.candidateReport ?? null;
 
   return (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="max-w-2xl mx-auto space-y-6">
+    <div className="flex-1 overflow-y-auto p-8">
+      <div className="max-w-3xl mx-auto space-y-6">
         {/* Error banner */}
         {error && (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="p-3 rounded-md bg-red-500/10 border border-red-500/20 text-sm text-red-400"
+            className="p-3.5 rounded-md bg-red-500/10 border border-red-500/20 text-base text-red-400"
           >
             {error}
           </motion.div>
@@ -150,12 +149,13 @@ export function InvestigationView({
               subjectName={subjectName}
               sourcesCount={sourcesFound.length}
               evidenceCount={evidenceCount}
+              trace={trace}
             />
             <InvestigationSteps trace={trace} status={status} />
             <SourcePills sources={sourcesFound} />
             <button
               onClick={onCancel}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Cancel investigation
             </button>
@@ -204,7 +204,7 @@ export function InvestigationView({
         {/* Error complete (no briefing but complete) */}
         {status === "complete" && !briefing && trace.length > 0 && (
           <div className="space-y-4">
-            <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/20 text-sm text-amber-400">
+            <div className="p-3.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-base text-amber-400">
               Investigation completed but no briefing was generated.
             </div>
             <CollapsibleSection label="View investigation trace" count={trace.length} icon={List}>

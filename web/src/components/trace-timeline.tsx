@@ -18,7 +18,7 @@ function KindBadge({ kind }: { kind: TraceEvent["kind"] }) {
   };
 
   return (
-    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium border ${variants[kind] ?? variants.plan}`}>
+    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium border ${variants[kind] ?? variants.plan}`}>
       {kind.replace("_", " ")}
     </span>
   );
@@ -44,12 +44,12 @@ function TraceEventItem({ event }: { event: TraceEvent }) {
       {/* Event content */}
       <div className="flex-1 pb-3 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
-          <Icon className={`h-3 w-3 ${meta.textClass} shrink-0`} />
-          <span className={`text-xs font-medium ${meta.textClass}`}>{meta.label}</span>
+          <Icon className={`h-3.5 w-3.5 ${meta.textClass} shrink-0`} />
+          <span className={`text-sm font-medium ${meta.textClass}`}>{meta.label}</span>
           <KindBadge kind={event.kind} />
-          <span className="text-[10px] text-muted-foreground ml-auto shrink-0">{time}</span>
+          <span className="text-xs text-muted-foreground ml-auto shrink-0">{time}</span>
         </div>
-        <p className="text-xs text-foreground/70 leading-relaxed break-words">
+        <p className="text-sm text-foreground/70 leading-relaxed break-words">
           {event.message}
         </p>
       </div>

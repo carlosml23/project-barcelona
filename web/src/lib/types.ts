@@ -122,10 +122,42 @@ export const BriefingSchema = z.object({
 });
 export type Briefing = z.infer<typeof BriefingSchema>;
 
+// ── Candidate Clustering ────────────────────────────────────────────────────
+
+export const CandidateSchema = z.object({
+  candidate_id: z.string(),
+  label: z.string(),
+  evidence_ids: z.array(z.string()),
+  summary: z.string(),
+  distinguishing_features: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+  evidence_count: z.number().int().nonnegative(),
+});
+export type Candidate = z.infer<typeof CandidateSchema>;
+
+export const FollowUpQuestionSchema = z.object({
+  question: z.string(),
+  distinguishes: z.array(z.string()),
+});
+export type FollowUpQuestion = z.infer<typeof FollowUpQuestionSchema>;
+
+export const CandidateReportSchema = z.object({
+  case_id: z.string(),
+  session_id: z.string().optional(),
+  candidates: z.array(CandidateSchema),
+  follow_up_questions: z.array(FollowUpQuestionSchema),
+  auto_selected: z.boolean(),
+  generated_at: z.string(),
+});
+export type CandidateReport = z.infer<typeof CandidateReportSchema>;
+
+// ── Case State ──────────────────────────────────────────────────────────────
+
 export const CaseStateSchema = z.object({
   case: CaseRowSchema,
   evidence: z.array(EvidenceSchema),
   trace: z.array(TraceEventSchema),
   briefing: BriefingSchema.nullable(),
+  candidateReport: CandidateReportSchema.nullable().optional(),
 });
 export type CaseState = z.infer<typeof CaseStateSchema>;

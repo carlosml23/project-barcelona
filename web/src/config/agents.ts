@@ -1,4 +1,4 @@
-import { Search, ShieldCheck, Brain, Network, type LucideIcon } from "lucide-react";
+import { Search, ShieldCheck, Brain, Network, Users, Sparkles, type LucideIcon } from "lucide-react";
 
 export interface AgentMeta {
   label: string;
@@ -25,6 +25,22 @@ export const AGENT_META: Record<string, AgentMeta> = {
     dotClass: "bg-amber-500",
     textClass: "text-amber-400",
     bgClass: "bg-amber-500/10",
+  },
+  refiner: {
+    label: "Refiner",
+    icon: Sparkles,
+    color: "purple",
+    dotClass: "bg-purple-500",
+    textClass: "text-purple-400",
+    bgClass: "bg-purple-500/10",
+  },
+  clusterer: {
+    label: "Clusterer",
+    icon: Users,
+    color: "indigo",
+    dotClass: "bg-indigo-500",
+    textClass: "text-indigo-400",
+    bgClass: "bg-indigo-500/10",
   },
   synthesiser: {
     label: "Synthesiser",

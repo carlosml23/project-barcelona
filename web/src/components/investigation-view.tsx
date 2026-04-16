@@ -2,26 +2,29 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, ChevronRight, FileText, AlertTriangle, List } from "lucide-react";
+import { Search, ChevronRight, FileText, AlertTriangle, List, Users } from "lucide-react";
 import { PhaseIndicator } from "@/components/phase-indicator";
 import { SourcePills } from "@/components/source-pills";
 import { BriefingReport } from "@/components/briefing-card";
+import { CandidateSelector } from "@/components/candidate-selector";
 import { TraceTimeline } from "@/components/trace-timeline";
 import { EvidenceList } from "@/components/evidence-list";
 import { GapsSection } from "@/components/gaps-section";
 import type { InvestigationStatus, InvestigationPhase, SourceHit } from "@/hooks/use-investigation";
-import type { TraceEvent, CaseState } from "@/lib/types";
+import type { TraceEvent, CaseState, CandidateReport } from "@/lib/types";
 
 interface InvestigationViewProps {
   status: InvestigationStatus;
   phase: InvestigationPhase;
   trace: TraceEvent[];
   caseState: CaseState | null;
+  candidateReport: CandidateReport | null;
   error: string | null;
   sourcesFound: SourceHit[];
   evidenceCount: number;
   subjectName: string;
   onCancel: () => void;
+  onSelectCandidate: (candidateId: string | null) => void;
 }
 
 interface CollapsibleSectionProps {
@@ -66,6 +69,25 @@ function CollapsibleSection({ label, count, icon: Icon, children }: CollapsibleS
   );
 }
 
+function CandidateReportSummary({ report }: { report: CandidateReport }) {
+  return (
+    <div className="space-y-2">
+      {report.candidates.map((c, i) => (
+        <div key={c.candidate_id} className="p-2.5 rounded-md bg-secondary/30 border border-border/20">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-medium text-foreground/90">#{i + 1}</span>
+            <span className="text-xs text-foreground/80">{c.label}</span>
+            <span className="text-[10px] text-muted-foreground ml-auto">
+              {Math.round(c.confidence * 100)}% · {c.evidence_count} evidence
+            </span>
+          </div>
+          <p className="text-xs text-foreground/60">{c.summary}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function IdleState() {
   return (
     <div className="flex-1 flex items-center justify-center">
@@ -88,11 +110,13 @@ export function InvestigationView({
   phase,
   trace,
   caseState,
+  candidateReport,
   error,
   sourcesFound,
   evidenceCount,
   subjectName,
   onCancel,
+  onSelectCandidate,
 }: InvestigationViewProps) {
   if (status === "idle" && trace.length === 0) {
     return <IdleState />;
@@ -102,6 +126,7 @@ export function InvestigationView({
   const evidence = caseState?.evidence ?? [];
   const gaps = briefing?.gaps ?? [];
   const isComplete = status === "complete" && briefing !== null;
+  const displayCandidateReport = caseState?.candidateReport ?? candidateReport;
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -140,6 +165,34 @@ export function InvestigationView({
           </motion.div>
         )}
 
+        {/* Awaiting selection: show phase + pills + candidate selector */}
+        {status === "awaitingSelection" && candidateReport && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="space-y-5"
+          >
+            <PhaseIndicator
+              phase={phase}
+              subjectName={subjectName}
+              sourcesCount={sourcesFound.length}
+              evidenceCount={evidenceCount}
+            />
+            <SourcePills sources={sourcesFound} />
+            <CandidateSelector
+              report={candidateReport}
+              onSelect={(id) => onSelectCandidate(id)}
+              onAutoSelect={() => onSelectCandidate(null)}
+            />
+            <button
+              onClick={onCancel}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancel investigation
+            </button>
+          </motion.div>
+        )}
+
         {/* Complete state: briefing report + collapsible details */}
         {isComplete && (
           <motion.div
@@ -161,6 +214,12 @@ export function InvestigationView({
               {gaps.length > 0 && (
                 <CollapsibleSection label="View gaps" count={gaps.length} icon={AlertTriangle}>
                   <GapsSection gaps={gaps} />
+                </CollapsibleSection>
+              )}
+
+              {displayCandidateReport && displayCandidateReport.candidates.length > 1 && (
+                <CollapsibleSection label="View candidate analysis" count={displayCandidateReport.candidates.length} icon={Users}>
+                  <CandidateReportSummary report={displayCandidateReport} />
                 </CollapsibleSection>
               )}
 

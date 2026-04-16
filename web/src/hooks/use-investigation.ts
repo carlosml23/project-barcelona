@@ -1,12 +1,20 @@
 "use client";
 
 import { useState, useRef, useCallback, useMemo } from "react";
-import type { TraceEvent, CaseState, CaseFormInput } from "@/lib/types";
+import type { TraceEvent, CaseState, CaseFormInput, CandidateReport } from "@/lib/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
-export type InvestigationStatus = "idle" | "running" | "complete" | "error";
-export type InvestigationPhase = "connecting" | "searching" | "verifying" | "refining" | "synthesizing" | "complete";
+export type InvestigationStatus = "idle" | "running" | "awaitingSelection" | "complete" | "error";
+export type InvestigationPhase =
+  | "connecting"
+  | "searching"
+  | "verifying"
+  | "refining"
+  | "clustering"
+  | "awaitingSelection"
+  | "synthesizing"
+  | "complete";
 
 export interface SourceHit {
   domain: string;
@@ -18,25 +26,28 @@ export interface InvestigationState {
   phase: InvestigationPhase;
   trace: TraceEvent[];
   caseState: CaseState | null;
+  candidateReport: CandidateReport | null;
   error: string | null;
   sourcesFound: SourceHit[];
   evidenceCount: number;
   startInvestigation: (input: CaseFormInput) => void;
+  selectCandidate: (candidateId: string | null) => Promise<void>;
   cancel: () => void;
 }
 
 const KNOWN_PHASES: Record<string, InvestigationPhase> = {
   verifier: "verifying",
   refiner: "refining",
+  clusterer: "clustering",
   synthesiser: "synthesizing",
 };
 
 function derivePhase(events: TraceEvent[], status: InvestigationStatus): InvestigationPhase {
   if (status === "complete") return "complete";
+  if (status === "awaitingSelection") return "awaitingSelection";
   if (status !== "running") return "connecting";
   if (events.length === 0) return "connecting";
 
-  // Walk backwards to find the latest meaningful agent
   for (let i = events.length - 1; i >= 0; i--) {
     const agent = events[i].agent;
     if (KNOWN_PHASES[agent]) return KNOWN_PHASES[agent];
@@ -51,8 +62,6 @@ function extractSources(events: TraceEvent[]): SourceHit[] {
   for (const evt of events) {
     if (evt.kind !== "tool_result") continue;
 
-    // Extract domains from the message (e.g., "3 hits (high_conf=2)")
-    // and from the agent name which often contains the source
     const domain = agentToDomain(evt.agent);
     if (domain && !seen.has(domain)) {
       seen.add(domain);
@@ -115,8 +124,10 @@ export function useInvestigation(): InvestigationState {
   const [status, setStatus] = useState<InvestigationStatus>("idle");
   const [trace, setTrace] = useState<TraceEvent[]>([]);
   const [caseState, setCaseState] = useState<CaseState | null>(null);
+  const [candidateReport, setCandidateReport] = useState<CandidateReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
 
   const phase = useMemo(() => derivePhase(trace, status), [trace, status]);
   const sourcesFound = useMemo(() => extractSources(trace), [trace]);
@@ -125,7 +136,23 @@ export function useInvestigation(): InvestigationState {
   const cancel = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    setStatus((prev) => (prev === "running" ? "idle" : prev));
+    setStatus((prev) => (prev === "running" || prev === "awaitingSelection" ? "idle" : prev));
+  }, []);
+
+  const selectCandidate = useCallback(async (candidateId: string | null) => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    try {
+      await fetch(`${API_BASE}/api/investigate/${sid}/select-candidate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidate_id: candidateId }),
+      });
+      setStatus("running");
+    } catch (err) {
+      setError(String(err));
+      setStatus("error");
+    }
   }, []);
 
   const startInvestigation = useCallback(
@@ -138,7 +165,9 @@ export function useInvestigation(): InvestigationState {
       setStatus("running");
       setTrace([]);
       setCaseState(null);
+      setCandidateReport(null);
       setError(null);
+      sessionIdRef.current = null;
 
       (async () => {
         try {
@@ -159,6 +188,7 @@ export function useInvestigation(): InvestigationState {
 
           const decoder = new TextDecoder();
           let buffer = "";
+          let currentEventType = "";
 
           while (true) {
             const { done, value } = await reader.read();
@@ -170,34 +200,60 @@ export function useInvestigation(): InvestigationState {
 
             for (const line of lines) {
               if (line.startsWith("event: ")) {
-                const eventType = line.slice(7).trim();
-
-                const dataLineIndex = lines.indexOf(line) + 1;
-                if (dataLineIndex < lines.length) continue;
-
-                if (eventType === "done") {
-                  continue;
-                }
+                currentEventType = line.slice(7).trim();
+                continue;
               }
 
               if (!line.startsWith("data: ")) continue;
 
               const raw = line.slice(6);
+              if (!raw) continue;
+
               try {
                 const parsed = JSON.parse(raw);
 
-                if (parsed.case && parsed.evidence && parsed.briefing !== undefined) {
-                  setCaseState(parsed as CaseState);
-                  setStatus("complete");
-                } else if (parsed.error) {
-                  setError(String(parsed.error));
-                  setStatus("error");
-                } else {
-                  setTrace((prev) => [...prev, parsed as TraceEvent]);
+                switch (currentEventType) {
+                  case "trace":
+                    setTrace((prev) => [...prev, parsed as TraceEvent]);
+                    break;
+                  case "candidates":
+                    setCandidateReport(parsed as CandidateReport);
+                    sessionIdRef.current = parsed.session_id ?? parsed.case_id;
+                    setStatus("awaitingSelection");
+                    break;
+                  case "candidates_auto":
+                    setCandidateReport(parsed as CandidateReport);
+                    // Don't pause — pipeline continues
+                    break;
+                  case "done":
+                    setCaseState(parsed as CaseState);
+                    setStatus("complete");
+                    break;
+                  case "error":
+                    setError(String(parsed.error));
+                    setStatus("error");
+                    break;
+                  case "keepalive":
+                    // Ignore keepalives
+                    break;
+                  default:
+                    // Fallback: detect by shape (backwards compat)
+                    if (parsed.case && parsed.evidence && parsed.briefing !== undefined) {
+                      setCaseState(parsed as CaseState);
+                      setStatus("complete");
+                    } else if (parsed.error) {
+                      setError(String(parsed.error));
+                      setStatus("error");
+                    } else if (parsed.ts && parsed.agent) {
+                      setTrace((prev) => [...prev, parsed as TraceEvent]);
+                    }
+                    break;
                 }
               } catch {
                 // incomplete JSON chunk, ignore
               }
+
+              currentEventType = "";
             }
           }
 
@@ -212,5 +268,17 @@ export function useInvestigation(): InvestigationState {
     [cancel],
   );
 
-  return { status, phase, trace, caseState, error, sourcesFound, evidenceCount, startInvestigation, cancel };
+  return {
+    status,
+    phase,
+    trace,
+    caseState,
+    candidateReport,
+    error,
+    sourcesFound,
+    evidenceCount,
+    startInvestigation,
+    selectCandidate,
+    cancel,
+  };
 }

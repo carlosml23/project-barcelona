@@ -176,4 +176,10 @@ export const store = {
       .get(case_id) as { briefing_json: string } | undefined;
     return row ? JSON.parse(row.briefing_json) : null;
   },
+  getCandidateReport(case_id: string): CandidateReport | null {
+    const row = db
+      .prepare(`SELECT report_json FROM candidate_reports WHERE case_id = ?`)
+      .get(case_id) as { report_json: string } | undefined;
+    return row ? JSON.parse(row.report_json) : null;
+  },
 };

@@ -16,10 +16,12 @@ export default function Home() {
     phase,
     trace,
     caseState,
+    candidateReport,
     error,
     sourcesFound,
     evidenceCount,
     startInvestigation,
+    selectCandidate,
     cancel,
   } = useInvestigation();
 
@@ -48,6 +50,7 @@ export default function Home() {
           evidence: data.evidence ?? [],
           trace: data.traces ?? [],
           briefing: data.briefing ?? null,
+          candidateReport: data.candidateReport ?? null,
         });
         if (data.briefing?.case_id) {
           setSubjectName(data.case?.full_name ?? "Subject");
@@ -73,6 +76,7 @@ export default function Home() {
   const displayPhase = historicalCase ? "complete" as const : phase;
   const displaySources = historicalCase ? [] : sourcesFound;
   const displayEvidence = historicalCase ? 0 : evidenceCount;
+  const displayCandidateReport = historicalCase ? (historicalCase.candidateReport ?? null) : candidateReport;
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -82,7 +86,7 @@ export default function Home() {
         {/* Left Panel */}
         <aside className="w-[360px] shrink-0 border-r border-border/50 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <CaseForm onSubmit={handleSubmit} isDisabled={status === "running"} />
+            <CaseForm onSubmit={handleSubmit} isDisabled={status === "running" || status === "awaitingSelection"} />
             <CaseSidebar onSelectCase={handleSelectCase} refreshKey={refreshKey} />
           </div>
         </aside>
@@ -94,11 +98,13 @@ export default function Home() {
             phase={displayPhase}
             trace={displayTrace}
             caseState={displayCase}
+            candidateReport={displayCandidateReport}
             error={error}
             sourcesFound={displaySources}
             evidenceCount={displayEvidence}
             subjectName={subjectName}
             onCancel={cancel}
+            onSelectCandidate={selectCandidate}
           />
         </main>
       </div>

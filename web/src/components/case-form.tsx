@@ -54,6 +54,9 @@ const COUNTRIES = [
   { value: "GB", label: "United Kingdom" },
 ];
 
+const filled = (value: string) => value.trim() ? "bg-[#EDE8D0]/60" : "";
+const labelClass = "text-sm text-foreground/70";
+
 interface CaseFormProps {
   onSubmit: (input: CaseFormInput) => void;
   isDisabled: boolean;
@@ -61,6 +64,7 @@ interface CaseFormProps {
 
 export function CaseForm({ onSubmit, isDisabled }: CaseFormProps) {
   const [showAdditional, setShowAdditional] = useState(false);
+  const [showDebt, setShowDebt] = useState(false);
 
   const [fullName, setFullName] = useState("");
   const [country, setCountry] = useState("ES");
@@ -107,9 +111,9 @@ export function CaseForm({ onSubmit, isDisabled }: CaseFormProps) {
   const isValid = fullName.trim().length > 0 && Number(debtEur) > 0;
 
   return (
-    <Card className="border-border/50">
+    <Card className="bg-transparent border-none shadow-none ring-0">
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+        <CardTitle className="text-base font-medium text-foreground/50 uppercase tracking-wider">
           Subject Details
         </CardTitle>
       </CardHeader>
@@ -118,22 +122,22 @@ export function CaseForm({ onSubmit, isDisabled }: CaseFormProps) {
           {/* Required: Subject Info */}
           <div className="space-y-3">
             <div>
-              <Label htmlFor="fullName" className="text-xs">Full Name *</Label>
+              <Label htmlFor="fullName" className={labelClass}>Full Name *</Label>
               <Input
                 id="fullName"
                 placeholder="Juan Garcia Lopez"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 disabled={isDisabled}
-                className="mt-1"
+                className={`mt-1 ${filled(fullName)}`}
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="country" className="text-xs">Country *</Label>
+                <Label htmlFor="country" className={labelClass}>Country *</Label>
                 <Select value={country} onValueChange={(v) => v && setCountry(v)} disabled={isDisabled}>
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger className={`mt-1 ${country ? "bg-[#EDE8D0]/60" : ""}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -144,39 +148,39 @@ export function CaseForm({ onSubmit, isDisabled }: CaseFormProps) {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="phone" className="text-xs">Phone</Label>
+                <Label htmlFor="phone" className={labelClass}>Phone</Label>
                 <Input
                   id="phone"
                   placeholder="+34600111222"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   disabled={isDisabled}
-                  className="mt-1"
+                  className={`mt-1 ${filled(phone)}`}
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="email" className="text-xs">Email</Label>
+                <Label htmlFor="email" className={labelClass}>Email</Label>
                 <Input
                   id="email"
                   placeholder="user@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={isDisabled}
-                  className="mt-1"
+                  className={`mt-1 ${filled(email)}`}
                 />
               </div>
               <div>
-                <Label htmlFor="dniNie" className="text-xs">DNI/NIE</Label>
+                <Label htmlFor="dniNie" className={labelClass}>DNI/NIE</Label>
                 <Input
                   id="dniNie"
                   placeholder="12345678Z"
                   value={dniNie}
                   onChange={(e) => setDniNie(e.target.value)}
                   disabled={isDisabled}
-                  className="mt-1"
+                  className={`mt-1 ${filled(dniNie)}`}
                 />
               </div>
             </div>
@@ -186,74 +190,80 @@ export function CaseForm({ onSubmit, isDisabled }: CaseFormProps) {
           <button
             type="button"
             onClick={() => setShowAdditional(!showAdditional)}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1.5 text-sm text-foreground/50 hover:text-foreground transition-colors"
           >
-            {showAdditional ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            {showAdditional ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             Additional Context
           </button>
 
           {showAdditional && (
-            <div className="space-y-3 pl-2 border-l-2 border-border/50">
-              <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-3 pl-2 border-l-2 border-foreground/10">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="provincia" className="text-xs">Provincia</Label>
+                  <Label htmlFor="provincia" className={labelClass}>Provincia</Label>
                   <Input
                     id="provincia"
                     placeholder="Madrid"
                     value={provincia}
                     onChange={(e) => setProvincia(e.target.value)}
                     disabled={isDisabled}
-                    className="mt-1"
+                    className={`mt-1 ${filled(provincia)}`}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="city" className="text-xs">City</Label>
+                  <Label htmlFor="city" className={labelClass}>City</Label>
                   <Input
                     id="city"
                     placeholder="Madrid"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     disabled={isDisabled}
-                    className="mt-1"
+                    className={`mt-1 ${filled(city)}`}
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="employer" className="text-xs">Employer</Label>
+                  <Label htmlFor="employer" className={labelClass}>Employer</Label>
                   <Input
                     id="employer"
                     placeholder="Telefonica S.A."
                     value={employer}
                     onChange={(e) => setEmployer(e.target.value)}
                     disabled={isDisabled}
-                    className="mt-1"
+                    className={`mt-1 ${filled(employer)}`}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="postalCode" className="text-xs">Postal Code</Label>
+                  <Label htmlFor="postalCode" className={labelClass}>Postal Code</Label>
                   <Input
                     id="postalCode"
                     placeholder="28001"
                     value={postalCode}
                     onChange={(e) => setPostalCode(e.target.value)}
                     disabled={isDisabled}
-                    className="mt-1"
+                    className={`mt-1 ${filled(postalCode)}`}
                   />
                 </div>
               </div>
             </div>
           )}
 
-          {/* Required: Debt Context */}
-          <div className="pt-2 border-t border-border/50">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-              Debt Context
-            </p>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
+          {/* Collapsible: Debt Context */}
+          <button
+            type="button"
+            onClick={() => setShowDebt(!showDebt)}
+            className="flex items-center gap-1.5 text-sm text-foreground/50 hover:text-foreground transition-colors"
+          >
+            {showDebt ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            Debt Context
+          </button>
+
+          {showDebt && (
+            <div className="space-y-3 pl-2 border-l-2 border-foreground/10">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="debtEur" className="text-xs">Amount (EUR) *</Label>
+                  <Label htmlFor="debtEur" className={labelClass}>Amount (EUR) *</Label>
                   <Input
                     id="debtEur"
                     type="number"
@@ -261,11 +271,11 @@ export function CaseForm({ onSubmit, isDisabled }: CaseFormProps) {
                     value={debtEur}
                     onChange={(e) => setDebtEur(e.target.value)}
                     disabled={isDisabled}
-                    className="mt-1"
+                    className={`mt-1 ${filled(debtEur)}`}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="debtAgeMonths" className="text-xs">Age (months)</Label>
+                  <Label htmlFor="debtAgeMonths" className={labelClass}>Age (months)</Label>
                   <Input
                     id="debtAgeMonths"
                     type="number"
@@ -273,15 +283,15 @@ export function CaseForm({ onSubmit, isDisabled }: CaseFormProps) {
                     value={debtAgeMonths}
                     onChange={(e) => setDebtAgeMonths(e.target.value)}
                     disabled={isDisabled}
-                    className="mt-1"
+                    className={`mt-1 ${filled(debtAgeMonths)}`}
                   />
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="debtOrigin" className="text-xs">Origin</Label>
+                <Label htmlFor="debtOrigin" className={labelClass}>Origin</Label>
                 <Select value={debtOrigin} onValueChange={(v) => v && setDebtOrigin(v)} disabled={isDisabled}>
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger className={`mt-1 ${debtOrigin ? "bg-[#EDE8D0]/60" : ""}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -292,9 +302,9 @@ export function CaseForm({ onSubmit, isDisabled }: CaseFormProps) {
                 </Select>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="callAttempts" className="text-xs">Call Attempts</Label>
+                  <Label htmlFor="callAttempts" className={labelClass}>Call Attempts</Label>
                   <Input
                     id="callAttempts"
                     type="number"
@@ -302,13 +312,13 @@ export function CaseForm({ onSubmit, isDisabled }: CaseFormProps) {
                     value={callAttempts}
                     onChange={(e) => setCallAttempts(e.target.value)}
                     disabled={isDisabled}
-                    className="mt-1"
+                    className={`mt-1 ${filled(callAttempts)}`}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="callOutcome" className="text-xs">Call Outcome</Label>
+                  <Label htmlFor="callOutcome" className={labelClass}>Call Outcome</Label>
                   <Select value={callOutcome} onValueChange={(v) => v && setCallOutcome(v)} disabled={isDisabled}>
-                    <SelectTrigger className="mt-1">
+                    <SelectTrigger className={`mt-1 ${callOutcome ? "bg-[#EDE8D0]/60" : ""}`}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -321,9 +331,9 @@ export function CaseForm({ onSubmit, isDisabled }: CaseFormProps) {
               </div>
 
               <div>
-                <Label htmlFor="legalAssetFinding" className="text-xs">Legal / Asset Finding</Label>
+                <Label htmlFor="legalAssetFinding" className={labelClass}>Legal / Asset Finding</Label>
                 <Select value={legalAssetFinding} onValueChange={(v) => v && setLegalAssetFinding(v)} disabled={isDisabled}>
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger className={`mt-1 ${legalAssetFinding ? "bg-[#EDE8D0]/60" : ""}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -334,14 +344,15 @@ export function CaseForm({ onSubmit, isDisabled }: CaseFormProps) {
                 </Select>
               </div>
             </div>
-          </div>
+          )}
 
           <Button
             type="submit"
+            size="lg"
             disabled={isDisabled || !isValid}
             className="w-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
           >
-            <Search className="h-4 w-4" />
+            <Search className="h-5 w-5" />
             {isDisabled ? "Investigating..." : "Investigate"}
           </Button>
         </form>

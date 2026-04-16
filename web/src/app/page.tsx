@@ -78,10 +78,10 @@ export default function Home() {
     <div className="flex flex-col h-screen overflow-hidden">
       <SherlockHeader />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden p-4 gap-4">
         {/* Left Panel */}
-        <aside className="w-[360px] shrink-0 border-r border-border/50 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <aside className="w-[400px] shrink-0 flex flex-col overflow-hidden bg-[#d5d0bb] rounded-2xl shadow-lg">
+          <div className="flex-1 overflow-y-auto p-5 space-y-5">
             <CaseForm onSubmit={handleSubmit} isDisabled={status === "running"} />
             <CaseSidebar onSelectCase={handleSelectCase} refreshKey={refreshKey} />
           </div>

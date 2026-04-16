@@ -37,7 +37,7 @@ function SignalBadge({ type }: { type: string }) {
     subsidy: "bg-yellow-500/15 text-yellow-400",
   };
   return (
-    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${styles[type] ?? "bg-muted text-muted-foreground"}`}>
+    <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${styles[type] ?? "bg-muted text-muted-foreground"}`}>
       {type}
     </span>
   );
@@ -61,19 +61,19 @@ export function BriefingReport({ briefing }: BriefingReportProps) {
     >
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-          <h2 className="text-base font-semibold text-foreground">Investigation Complete</h2>
+          <h2 className="text-lg font-semibold text-foreground">Investigation Complete</h2>
           <ConfidenceBadge confidence={briefing.overall_confidence} />
         </div>
-        <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2 gap-1 text-xs text-muted-foreground">
-          {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+        <Button variant="ghost" size="sm" onClick={handleCopy} className="h-8 px-2.5 gap-1.5 text-sm text-muted-foreground">
+          {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
           {copied ? "Copied" : "Copy"}
         </Button>
       </div>
 
       {/* Summary */}
-      <p className="text-sm leading-relaxed text-foreground/90">
+      <p className="text-base leading-relaxed text-foreground/90">
         {briefing.summary}
       </p>
 
@@ -81,18 +81,18 @@ export function BriefingReport({ briefing }: BriefingReportProps) {
 
       {/* Findings */}
       {briefing.findings.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="space-y-2.5">
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
             Findings
           </h3>
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {briefing.findings.map((f, i) => (
-              <div key={i} className="p-3 rounded-lg bg-secondary/40 border border-border/20">
-                <div className="flex items-center gap-2 mb-1.5">
+              <div key={i} className="p-4 rounded-lg bg-secondary/40 border border-border/20">
+                <div className="flex items-center gap-2 mb-2">
                   <SignalBadge type={f.signal_type} />
                   <ConfidenceBadge confidence={f.confidence} />
                 </div>
-                <p className="text-sm text-foreground/85 leading-relaxed">{f.claim}</p>
+                <p className="text-base text-foreground/85 leading-relaxed">{f.claim}</p>
               </div>
             ))}
           </div>
@@ -101,14 +101,14 @@ export function BriefingReport({ briefing }: BriefingReportProps) {
 
       {/* Negotiation Angles */}
       {briefing.negotiation_angles.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-            <Lightbulb className="h-3 w-3 text-primary" />
+        <div className="space-y-2.5">
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <Lightbulb className="h-3.5 w-3.5 text-primary" />
             Negotiation Angles
           </h3>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {briefing.negotiation_angles.map((angle, i) => (
-              <p key={i} className="text-sm text-foreground/80 pl-3 border-l-2 border-primary/30 leading-relaxed">
+              <p key={i} className="text-base text-foreground/80 pl-3 border-l-2 border-primary/30 leading-relaxed">
                 {angle}
               </p>
             ))}

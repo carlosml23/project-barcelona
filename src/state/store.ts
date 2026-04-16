@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { env } from "../config/env.js";
-import type { CaseRow, Evidence, Briefing, TraceEvent } from "./types.js";
+import type { CaseRow, Evidence, Briefing, CandidateReport, TraceEvent } from "./types.js";
 
 mkdirSync(dirname(env.SQLITE_PATH), { recursive: true });
 
@@ -67,6 +67,12 @@ CREATE TABLE IF NOT EXISTS briefings (
   briefing_json TEXT NOT NULL,
   generated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS candidate_reports (
+  case_id TEXT PRIMARY KEY REFERENCES cases(case_id) ON DELETE CASCADE,
+  report_json TEXT NOT NULL,
+  generated_at TEXT NOT NULL
+);
 `);
 
 const insertCase = db.prepare(`
@@ -92,6 +98,11 @@ VALUES (@case_id, @ts, @agent, @kind, @message, @data_json)
 
 const insertBriefing = db.prepare(`
 INSERT OR REPLACE INTO briefings (case_id, briefing_json, generated_at)
+VALUES (?, ?, ?)
+`);
+
+const insertCandidateReport = db.prepare(`
+INSERT OR REPLACE INTO candidate_reports (case_id, report_json, generated_at)
 VALUES (?, ?, ?)
 `);
 
@@ -128,6 +139,9 @@ export const store = {
   },
   saveBriefing(b: Briefing): void {
     insertBriefing.run(b.case_id, JSON.stringify(b), b.generated_at);
+  },
+  saveCandidateReport(r: CandidateReport): void {
+    insertCandidateReport.run(r.case_id, JSON.stringify(r), r.generated_at);
   },
   listCases(): CaseRow[] {
     return db.prepare(`SELECT * FROM cases ORDER BY inserted_at DESC`).all() as CaseRow[];

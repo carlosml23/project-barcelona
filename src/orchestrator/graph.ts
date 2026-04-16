@@ -1,8 +1,9 @@
-import type { CaseRow, CaseState, Evidence, Gap } from "../state/types.js";
+import type { CaseRow, CaseState, CandidateReport, Evidence, Gap } from "../state/types.js";
 import { runSearchFanOut } from "../agents/search.js";
 import { discoverEvidence } from "../agents/discovery.js";
 import { verifyEvidence } from "../agents/verifier.js";
 import { refineEvidence } from "../agents/refiner.js";
+import { clusterCandidates } from "../agents/clusterer.js";
 import { synthesise } from "../agents/synthesiser.js";
 import { store } from "../state/store.js";
 import { env } from "../config/env.js";
@@ -10,10 +11,12 @@ import { env } from "../config/env.js";
 export interface RunOptions {
   persist?: boolean;
   onTrace?: (msg: string) => void;
+  mode?: "auto" | "interactive";
+  onCandidateReport?: (report: CandidateReport, evidence: Evidence[]) => Promise<string | null>;
 }
 
 export async function runCase(row: CaseRow, opts: RunOptions = {}): Promise<CaseState> {
-  const { persist = true, onTrace } = opts;
+  const { persist = true, onTrace, mode = "auto", onCandidateReport } = opts;
   if (persist) store.saveCase(row);
 
   const log = (m: string): void => onTrace?.(m);
@@ -66,9 +69,36 @@ export async function runCase(row: CaseRow, opts: RunOptions = {}): Promise<Case
     }
   }
 
+  // ── Stage 3.5: Cluster candidates ────────────────────────────────────
+  log(`[clusterer] grouping ${allEvidence.length} evidence into candidates`);
+  const cluster = await clusterCandidates(row, allEvidence);
+  for (const t of cluster.trace) log(`[${t.agent}:${t.kind}] ${t.message}`);
+  refinementTrace = refinementTrace.concat(cluster.trace);
+
+  let selectedEvidence = allEvidence;
+  const { report: candidateReport } = cluster;
+
+  if (!candidateReport.auto_selected && mode === "interactive" && onCandidateReport) {
+    const selectedId = await onCandidateReport(candidateReport, allEvidence);
+    const chosen = selectedId
+      ? candidateReport.candidates.find((c) => c.candidate_id === selectedId)
+      : candidateReport.candidates[0];
+    if (chosen) {
+      const chosenIds = new Set(chosen.evidence_ids);
+      selectedEvidence = allEvidence.filter((e) => chosenIds.has(e.id));
+      log(`[orchestrator] operator selected candidate "${chosen.label}" — ${selectedEvidence.length} evidence`);
+    }
+  } else if (candidateReport.candidates.length > 1) {
+    // Auto mode or auto-selected: use top candidate
+    const top = candidateReport.candidates[0];
+    const topIds = new Set(top.evidence_ids);
+    selectedEvidence = allEvidence.filter((e) => topIds.has(e.id));
+    log(`[orchestrator] auto-selected top candidate "${top.label}" — ${selectedEvidence.length} evidence`);
+  }
+
   // ── Stage 4: Synthesise briefing ─────────────────────────────────────
-  log(`[synthesiser] building briefing from ${allEvidence.length} evidence (${allGaps.length} gaps)`);
-  const synth = await synthesise(row, allEvidence, allGaps);
+  log(`[synthesiser] building briefing from ${selectedEvidence.length} evidence (${allGaps.length} gaps)`);
+  const synth = await synthesise(row, selectedEvidence, allGaps);
   for (const t of synth.trace) log(`[${t.agent}:${t.kind}] ${t.message}`);
 
   const fullTrace = [...refinementTrace, ...synth.trace];
@@ -77,13 +107,15 @@ export async function runCase(row: CaseRow, opts: RunOptions = {}): Promise<Case
     for (const e of mergedEvidence) store.saveEvidence(e);
     for (const t of fullTrace) store.saveTrace(t);
     store.saveBriefing(synth.briefing);
+    store.saveCandidateReport(candidateReport);
   }
 
   return {
     case: row,
-    evidence: allEvidence,
+    evidence: selectedEvidence,
     trace: fullTrace,
     briefing: synth.briefing,
+    candidateReport,
   };
 }
 

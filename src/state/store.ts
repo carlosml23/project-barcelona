@@ -157,4 +157,23 @@ export const store = {
       raw: r.raw_json ? JSON.parse(r.raw_json) : undefined,
     }));
   },
+  getTraces(case_id: string): TraceEvent[] {
+    const rows = db
+      .prepare(`SELECT * FROM traces WHERE case_id = ? ORDER BY ts ASC`)
+      .all(case_id) as Array<TraceEvent & { data_json: string | null }>;
+    return rows.map((r) => ({
+      ts: r.ts,
+      case_id: r.case_id,
+      agent: r.agent,
+      kind: r.kind,
+      message: r.message,
+      data: r.data_json ? JSON.parse(r.data_json) : undefined,
+    }));
+  },
+  getBriefing(case_id: string): Briefing | null {
+    const row = db
+      .prepare(`SELECT briefing_json FROM briefings WHERE case_id = ?`)
+      .get(case_id) as { briefing_json: string } | undefined;
+    return row ? JSON.parse(row.briefing_json) : null;
+  },
 };

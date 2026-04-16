@@ -1,4 +1,4 @@
-import type { CaseRow, CaseState, CandidateReport, Evidence, Gap } from "../state/types.js";
+import type { CaseRow, CaseState, CandidateReport, Evidence, Gap, TraceEvent } from "../state/types.js";
 import { runSearchFanOut } from "../agents/search.js";
 import { discoverEvidence } from "../agents/discovery.js";
 import { verifyEvidence } from "../agents/verifier.js";
@@ -11,15 +11,17 @@ import { env } from "../config/env.js";
 export interface RunOptions {
   persist?: boolean;
   onTrace?: (msg: string) => void;
+  onTraceEvent?: (evt: TraceEvent) => void;
   mode?: "auto" | "interactive";
   onCandidateReport?: (report: CandidateReport, evidence: Evidence[]) => Promise<string | null>;
 }
 
 export async function runCase(row: CaseRow, opts: RunOptions = {}): Promise<CaseState> {
-  const { persist = true, onTrace, mode = "auto", onCandidateReport } = opts;
+  const { persist = true, onTrace, onTraceEvent, mode = "auto", onCandidateReport } = opts;
   if (persist) store.saveCase(row);
 
   const log = (m: string): void => onTrace?.(m);
+  const emit = (t: TraceEvent): void => onTraceEvent?.(t);
 
   // ── Stage 0 + 1: Discovery + Fan-out in parallel ─────────────────────
   const shouldRunDiscovery = Boolean(env.ANTHROPIC_API_KEY) && env.DISCOVERY_ENABLED;
@@ -32,8 +34,8 @@ export async function runCase(row: CaseRow, opts: RunOptions = {}): Promise<Case
     runSearchFanOut(row),
   ]);
 
-  for (const t of discoveryResult.trace) log(`[${t.agent}:${t.kind}] ${t.message}`);
-  for (const t of searchResult.trace) log(`[${t.agent}:${t.kind}] ${t.message}`);
+  for (const t of discoveryResult.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
+  for (const t of searchResult.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
 
   // Merge and deduplicate evidence from both stages
   const mergedEvidence = deduplicateEvidence([
@@ -45,7 +47,7 @@ export async function runCase(row: CaseRow, opts: RunOptions = {}): Promise<Case
   // ── Stage 2: Verify initial evidence ─────────────────────────────────
   log(`[verifier] scoring ${mergedEvidence.length} hits`);
   const verified = verifyEvidence(row.case_id, mergedEvidence);
-  for (const t of verified.trace) log(`[${t.agent}:${t.kind}] ${t.message}`);
+  for (const t of verified.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
 
   // ── Stage 3: Agentic refinement (if API key available) ───────────────
   let allEvidence: Evidence[] = verified.kept;
@@ -55,13 +57,13 @@ export async function runCase(row: CaseRow, opts: RunOptions = {}): Promise<Case
   if (env.ANTHROPIC_API_KEY) {
     log(`[refiner] reviewing ${verified.kept.length} evidence, ${verified.gaps.length} gaps`);
     const refined = await refineEvidence(row, verified.kept, verified.gaps);
-    for (const t of refined.trace) log(`[${t.agent}:${t.kind}] ${t.message}`);
+    for (const t of refined.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
     refinementTrace = refinementTrace.concat(refined.trace);
 
     if (refined.additionalEvidence.length > 0) {
       log(`[verifier] re-verifying ${refined.additionalEvidence.length} new evidence from refiner`);
       const reVerified = verifyEvidence(row.case_id, refined.additionalEvidence);
-      for (const t of reVerified.trace) log(`[${t.agent}:${t.kind}] ${t.message}`);
+      for (const t of reVerified.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
       refinementTrace = refinementTrace.concat(reVerified.trace);
 
       allEvidence = [...verified.kept, ...reVerified.kept];
@@ -72,7 +74,7 @@ export async function runCase(row: CaseRow, opts: RunOptions = {}): Promise<Case
   // ── Stage 3.5: Cluster candidates ────────────────────────────────────
   log(`[clusterer] grouping ${allEvidence.length} evidence into candidates`);
   const cluster = await clusterCandidates(row, allEvidence);
-  for (const t of cluster.trace) log(`[${t.agent}:${t.kind}] ${t.message}`);
+  for (const t of cluster.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
   refinementTrace = refinementTrace.concat(cluster.trace);
 
   let selectedEvidence = allEvidence;
@@ -99,7 +101,7 @@ export async function runCase(row: CaseRow, opts: RunOptions = {}): Promise<Case
   // ── Stage 4: Synthesise briefing ─────────────────────────────────────
   log(`[synthesiser] building briefing from ${selectedEvidence.length} evidence (${allGaps.length} gaps)`);
   const synth = await synthesise(row, selectedEvidence, allGaps);
-  for (const t of synth.trace) log(`[${t.agent}:${t.kind}] ${t.message}`);
+  for (const t of synth.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
 
   const fullTrace = [...refinementTrace, ...synth.trace];
 

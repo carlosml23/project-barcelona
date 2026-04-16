@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, ShieldCheck, Sparkles, Brain, Loader2, Users, UserCheck } from "lucide-react";
+import { Search, ShieldCheck, Sparkles, Brain, Loader2, Users } from "lucide-react";
 import type { InvestigationPhase } from "@/hooks/use-investigation";
 
 interface PhaseIndicatorProps {
@@ -17,7 +17,6 @@ const PHASE_CONFIG: Record<string, { label: string; icon: typeof Search; color: 
   verifying: { label: "Verifying identity", icon: ShieldCheck, color: "text-amber-400" },
   refining: { label: "Deep-diving into leads", icon: Sparkles, color: "text-purple-400" },
   clustering: { label: "Grouping evidence by candidate", icon: Users, color: "text-indigo-400" },
-  awaitingSelection: { label: "Candidate selection required", icon: UserCheck, color: "text-orange-400" },
   synthesizing: { label: "Analyzing findings", icon: Brain, color: "text-emerald-400" },
 };
 
@@ -35,9 +34,7 @@ export function PhaseIndicator({ phase, subjectName, sourcesCount, evidenceCount
         ? "Searching for additional evidence"
         : phase === "clustering"
           ? "Analyzing identity patterns"
-          : phase === "awaitingSelection"
-            ? "Review candidates below"
-            : phase === "synthesizing"
+          : phase === "synthesizing"
               ? "Building your briefing"
               : "";
 

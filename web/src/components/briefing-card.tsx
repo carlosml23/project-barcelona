@@ -6,10 +6,11 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import type { Briefing } from "@/lib/types";
+import type { Briefing, Candidate } from "@/lib/types";
 
 interface BriefingReportProps {
   briefing: Briefing;
+  candidates?: Candidate[];
 }
 
 function ConfidenceBadge({ confidence }: { confidence: string }) {
@@ -43,7 +44,72 @@ function SignalBadge({ type }: { type: string }) {
   );
 }
 
-export function BriefingReport({ briefing }: BriefingReportProps) {
+function confidenceColor(score: number): string {
+  if (score >= 0.75) return "text-emerald-400";
+  if (score >= 0.5) return "text-amber-400";
+  return "text-red-400";
+}
+
+function NegotiationAngleTabs({
+  angles,
+  candidates = [],
+}: {
+  angles: Record<string, string[]>;
+  candidates?: Candidate[];
+}) {
+  const labels = Object.keys(angles);
+  const [activeTab, setActiveTab] = useState(0);
+  const isSingleGroup = labels.length <= 1;
+  const activeAngles = angles[labels[activeTab]] ?? [];
+
+  // Build label → confidence lookup from candidates
+  const scoreByLabel = new Map(candidates.map((c) => [c.label, c.confidence]));
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+        <Lightbulb className="h-3 w-3 text-primary" />
+        Negotiation Angles
+      </h3>
+
+      {!isSingleGroup && (
+        <div className="flex gap-1 overflow-x-auto pb-1">
+          {labels.map((label, i) => {
+            const score = scoreByLabel.get(label);
+            return (
+              <button
+                key={label}
+                onClick={() => setActiveTab(i)}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  i === activeTab
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+                }`}
+              >
+                <span className="truncate max-w-[200px]">{label}</span>
+                {score != null && (
+                  <span className={`tabular-nums ${i === activeTab ? confidenceColor(score) : ""}`}>
+                    {Math.round(score * 100)}%
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        {activeAngles.map((angle, i) => (
+          <p key={i} className="text-sm text-foreground/80 pl-3 border-l-2 border-primary/30 leading-relaxed">
+            {angle}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function BriefingReport({ briefing, candidates }: BriefingReportProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -100,20 +166,8 @@ export function BriefingReport({ briefing }: BriefingReportProps) {
       )}
 
       {/* Negotiation Angles */}
-      {briefing.negotiation_angles.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-            <Lightbulb className="h-3 w-3 text-primary" />
-            Negotiation Angles
-          </h3>
-          <div className="space-y-1.5">
-            {briefing.negotiation_angles.map((angle, i) => (
-              <p key={i} className="text-sm text-foreground/80 pl-3 border-l-2 border-primary/30 leading-relaxed">
-                {angle}
-              </p>
-            ))}
-          </div>
-        </div>
+      {Object.keys(briefing.negotiation_angles).length > 0 && (
+        <NegotiationAngleTabs angles={briefing.negotiation_angles} candidates={candidates} />
       )}
     </motion.div>
   );

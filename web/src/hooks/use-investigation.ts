@@ -1,18 +1,17 @@
 "use client";
 
 import { useState, useRef, useCallback, useMemo } from "react";
-import type { TraceEvent, CaseState, CaseFormInput, CandidateReport } from "@/lib/types";
+import type { TraceEvent, CaseState, CaseFormInput } from "@/lib/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
-export type InvestigationStatus = "idle" | "running" | "awaitingSelection" | "complete" | "error";
+export type InvestigationStatus = "idle" | "running" | "complete" | "error";
 export type InvestigationPhase =
   | "connecting"
   | "searching"
   | "verifying"
   | "refining"
   | "clustering"
-  | "awaitingSelection"
   | "synthesizing"
   | "complete";
 
@@ -26,12 +25,10 @@ export interface InvestigationState {
   phase: InvestigationPhase;
   trace: TraceEvent[];
   caseState: CaseState | null;
-  candidateReport: CandidateReport | null;
   error: string | null;
   sourcesFound: SourceHit[];
   evidenceCount: number;
   startInvestigation: (input: CaseFormInput) => void;
-  selectCandidate: (candidateId: string | null) => Promise<void>;
   cancel: () => void;
 }
 
@@ -44,7 +41,6 @@ const KNOWN_PHASES: Record<string, InvestigationPhase> = {
 
 function derivePhase(events: TraceEvent[], status: InvestigationStatus): InvestigationPhase {
   if (status === "complete") return "complete";
-  if (status === "awaitingSelection") return "awaitingSelection";
   if (status !== "running") return "connecting";
   if (events.length === 0) return "connecting";
 
@@ -124,10 +120,8 @@ export function useInvestigation(): InvestigationState {
   const [status, setStatus] = useState<InvestigationStatus>("idle");
   const [trace, setTrace] = useState<TraceEvent[]>([]);
   const [caseState, setCaseState] = useState<CaseState | null>(null);
-  const [candidateReport, setCandidateReport] = useState<CandidateReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const sessionIdRef = useRef<string | null>(null);
 
   const phase = useMemo(() => derivePhase(trace, status), [trace, status]);
   const sourcesFound = useMemo(() => extractSources(trace), [trace]);
@@ -136,23 +130,7 @@ export function useInvestigation(): InvestigationState {
   const cancel = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    setStatus((prev) => (prev === "running" || prev === "awaitingSelection" ? "idle" : prev));
-  }, []);
-
-  const selectCandidate = useCallback(async (candidateId: string | null) => {
-    const sid = sessionIdRef.current;
-    if (!sid) return;
-    try {
-      await fetch(`${API_BASE}/api/investigate/${sid}/select-candidate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ candidate_id: candidateId }),
-      });
-      setStatus("running");
-    } catch (err) {
-      setError(String(err));
-      setStatus("error");
-    }
+    setStatus((prev) => (prev === "running" ? "idle" : prev));
   }, []);
 
   const startInvestigation = useCallback(
@@ -165,9 +143,7 @@ export function useInvestigation(): InvestigationState {
       setStatus("running");
       setTrace([]);
       setCaseState(null);
-      setCandidateReport(null);
       setError(null);
-      sessionIdRef.current = null;
 
       (async () => {
         try {
@@ -216,15 +192,6 @@ export function useInvestigation(): InvestigationState {
                   case "trace":
                     setTrace((prev) => [...prev, parsed as TraceEvent]);
                     break;
-                  case "candidates":
-                    setCandidateReport(parsed as CandidateReport);
-                    sessionIdRef.current = parsed.session_id ?? parsed.case_id;
-                    setStatus("awaitingSelection");
-                    break;
-                  case "candidates_auto":
-                    setCandidateReport(parsed as CandidateReport);
-                    // Don't pause — pipeline continues
-                    break;
                   case "done":
                     setCaseState(parsed as CaseState);
                     setStatus("complete");
@@ -232,9 +199,6 @@ export function useInvestigation(): InvestigationState {
                   case "error":
                     setError(String(parsed.error));
                     setStatus("error");
-                    break;
-                  case "keepalive":
-                    // Ignore keepalives
                     break;
                   default:
                     // Fallback: detect by shape (backwards compat)
@@ -273,12 +237,10 @@ export function useInvestigation(): InvestigationState {
     phase,
     trace,
     caseState,
-    candidateReport,
     error,
     sourcesFound,
     evidenceCount,
     startInvestigation,
-    selectCandidate,
     cancel,
   };
 }

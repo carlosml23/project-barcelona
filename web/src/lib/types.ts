@@ -115,7 +115,7 @@ export const BriefingSchema = z.object({
   case_id: z.string(),
   summary: z.string(),
   findings: z.array(FindingSchema),
-  negotiation_angles: z.array(z.string()),
+  negotiation_angles: z.record(z.string(), z.array(z.string())),
   gaps: z.array(GapSchema),
   overall_confidence: z.enum(["low", "medium", "high"]),
   generated_at: z.string(),

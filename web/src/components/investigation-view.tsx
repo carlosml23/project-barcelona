@@ -6,7 +6,6 @@ import { Search, ChevronRight, FileText, AlertTriangle, List, Users } from "luci
 import { PhaseIndicator } from "@/components/phase-indicator";
 import { SourcePills } from "@/components/source-pills";
 import { BriefingReport } from "@/components/briefing-card";
-import { CandidateSelector } from "@/components/candidate-selector";
 import { TraceTimeline } from "@/components/trace-timeline";
 import { EvidenceList } from "@/components/evidence-list";
 import { GapsSection } from "@/components/gaps-section";
@@ -18,13 +17,11 @@ interface InvestigationViewProps {
   phase: InvestigationPhase;
   trace: TraceEvent[];
   caseState: CaseState | null;
-  candidateReport: CandidateReport | null;
   error: string | null;
   sourcesFound: SourceHit[];
   evidenceCount: number;
   subjectName: string;
   onCancel: () => void;
-  onSelectCandidate: (candidateId: string | null) => void;
 }
 
 interface CollapsibleSectionProps {
@@ -110,13 +107,11 @@ export function InvestigationView({
   phase,
   trace,
   caseState,
-  candidateReport,
   error,
   sourcesFound,
   evidenceCount,
   subjectName,
   onCancel,
-  onSelectCandidate,
 }: InvestigationViewProps) {
   if (status === "idle" && trace.length === 0) {
     return <IdleState />;
@@ -126,7 +121,7 @@ export function InvestigationView({
   const evidence = caseState?.evidence ?? [];
   const gaps = briefing?.gaps ?? [];
   const isComplete = status === "complete" && briefing !== null;
-  const displayCandidateReport = caseState?.candidateReport ?? candidateReport;
+  const displayCandidateReport = caseState?.candidateReport ?? null;
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -165,34 +160,6 @@ export function InvestigationView({
           </motion.div>
         )}
 
-        {/* Awaiting selection: show phase + pills + candidate selector */}
-        {status === "awaitingSelection" && candidateReport && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="space-y-5"
-          >
-            <PhaseIndicator
-              phase={phase}
-              subjectName={subjectName}
-              sourcesCount={sourcesFound.length}
-              evidenceCount={evidenceCount}
-            />
-            <SourcePills sources={sourcesFound} />
-            <CandidateSelector
-              report={candidateReport}
-              onSelect={(id) => onSelectCandidate(id)}
-              onAutoSelect={() => onSelectCandidate(null)}
-            />
-            <button
-              onClick={onCancel}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Cancel investigation
-            </button>
-          </motion.div>
-        )}
-
         {/* Complete state: briefing report + collapsible details */}
         {isComplete && (
           <motion.div
@@ -201,7 +168,7 @@ export function InvestigationView({
             transition={{ duration: 0.3 }}
             className="space-y-4"
           >
-            <BriefingReport briefing={briefing} />
+            <BriefingReport briefing={briefing} candidates={displayCandidateReport?.candidates} />
 
             {/* Collapsible detail sections */}
             <div className="space-y-2 pt-2">

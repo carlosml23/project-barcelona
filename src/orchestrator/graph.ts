@@ -12,12 +12,10 @@ export interface RunOptions {
   persist?: boolean;
   onTrace?: (msg: string) => void;
   onTraceEvent?: (evt: TraceEvent) => void;
-  mode?: "auto" | "interactive";
-  onCandidateReport?: (report: CandidateReport, evidence: Evidence[]) => Promise<string | null>;
 }
 
 export async function runCase(row: CaseRow, opts: RunOptions = {}): Promise<CaseState> {
-  const { persist = true, onTrace, onTraceEvent, mode = "auto", onCandidateReport } = opts;
+  const { persist = true, onTrace, onTraceEvent } = opts;
   if (persist) store.saveCase(row);
 
   const log = (m: string): void => onTrace?.(m);
@@ -77,30 +75,11 @@ export async function runCase(row: CaseRow, opts: RunOptions = {}): Promise<Case
   for (const t of cluster.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
   refinementTrace = refinementTrace.concat(cluster.trace);
 
-  let selectedEvidence = allEvidence;
   const { report: candidateReport } = cluster;
 
-  if (!candidateReport.auto_selected && mode === "interactive" && onCandidateReport) {
-    const selectedId = await onCandidateReport(candidateReport, allEvidence);
-    const chosen = selectedId
-      ? candidateReport.candidates.find((c) => c.candidate_id === selectedId)
-      : candidateReport.candidates[0];
-    if (chosen) {
-      const chosenIds = new Set(chosen.evidence_ids);
-      selectedEvidence = allEvidence.filter((e) => chosenIds.has(e.id));
-      log(`[orchestrator] operator selected candidate "${chosen.label}" — ${selectedEvidence.length} evidence`);
-    }
-  } else if (candidateReport.candidates.length > 1) {
-    // Auto mode or auto-selected: use top candidate
-    const top = candidateReport.candidates[0];
-    const topIds = new Set(top.evidence_ids);
-    selectedEvidence = allEvidence.filter((e) => topIds.has(e.id));
-    log(`[orchestrator] auto-selected top candidate "${top.label}" — ${selectedEvidence.length} evidence`);
-  }
-
   // ── Stage 4: Synthesise briefing ─────────────────────────────────────
-  log(`[synthesiser] building briefing from ${selectedEvidence.length} evidence (${allGaps.length} gaps)`);
-  const synth = await synthesise(row, selectedEvidence, allGaps);
+  log(`[synthesiser] building briefing from ${allEvidence.length} evidence (${allGaps.length} gaps)`);
+  const synth = await synthesise(row, allEvidence, allGaps, candidateReport);
   for (const t of synth.trace) { log(`[${t.agent}:${t.kind}] ${t.message}`); emit(t); }
 
   const fullTrace = [...refinementTrace, ...synth.trace];
@@ -114,7 +93,7 @@ export async function runCase(row: CaseRow, opts: RunOptions = {}): Promise<Case
 
   return {
     case: row,
-    evidence: selectedEvidence,
+    evidence: allEvidence,
     trace: fullTrace,
     briefing: synth.briefing,
     candidateReport,

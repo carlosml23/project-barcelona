@@ -7,6 +7,7 @@ import {
   type Evidence,
   type TraceEvent,
 } from "../state/types.js";
+import { jsonrepair } from "jsonrepair";
 import { env } from "../config/env.js";
 import { newId } from "../util/id.js";
 import { extractDataPoints } from "./identity.js";
@@ -348,11 +349,13 @@ function validateCandidates(
 
 function extractJson(text: string): string {
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fence) return fence[1].trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end === -1) throw new Error("no JSON object found in model output");
-  return text.slice(start, end + 1);
+  const raw = fence ? fence[1].trim() : (() => {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start === -1 || end === -1) throw new Error("no JSON object found in model output");
+    return text.slice(start, end + 1);
+  })();
+  return jsonrepair(raw);
 }
 
 function extractEmployerFromSnippet(e: Evidence, row: CaseRow): string | undefined {

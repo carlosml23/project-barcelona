@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ChevronRight, FileText, AlertTriangle, List, Users } from "lucide-react";
 import { PhaseIndicator } from "@/components/phase-indicator";
+import { InvestigationSteps } from "@/components/investigation-steps";
 import { SourcePills } from "@/components/source-pills";
 import { BriefingReport } from "@/components/briefing-card";
 import { TraceTimeline } from "@/components/trace-timeline";
@@ -150,6 +151,7 @@ export function InvestigationView({
               sourcesCount={sourcesFound.length}
               evidenceCount={evidenceCount}
             />
+            <InvestigationSteps trace={trace} status={status} />
             <SourcePills sources={sourcesFound} />
             <button
               onClick={onCancel}

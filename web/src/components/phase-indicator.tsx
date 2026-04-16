@@ -12,7 +12,7 @@ interface PhaseIndicatorProps {
 }
 
 const PHASE_CONFIG: Record<string, { label: string; icon: typeof Search; color: string }> = {
-  connecting: { label: "Starting investigation...", icon: Loader2, color: "text-muted-foreground" },
+  connecting: { label: "Preparing search plan...", icon: Loader2, color: "text-blue-400" },
   searching: { label: "Searching public records", icon: Search, color: "text-blue-400" },
   verifying: { label: "Verifying identity", icon: ShieldCheck, color: "text-amber-400" },
   refining: { label: "Deep-diving into leads", icon: Sparkles, color: "text-purple-400" },

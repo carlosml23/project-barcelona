@@ -1,6 +1,6 @@
 # Sherlock
 
-> OSINT multi-agent system that transforms a debtor profile into an evidence-backed collector briefing in under 60 seconds.
+> Open Source Intelligence (OSINT) multi-agent system that transforms a debtor profile into an evidence-backed collector briefing in under 60 seconds.
 
 Built for the **Vexor Hackathon** (24h build).
 
